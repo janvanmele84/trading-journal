@@ -447,22 +447,22 @@
   <div class="panel active" id="panel-checklist">
     <div id="loadingChecklist" class="loading">Laden...</div>
     <div id="checklistContent" style="display:none;">
+      <div class="card" id="scoreCard" style="padding:16px;">
+        <div id="scoreDisplay" class="score-display" style="padding:14px; margin-bottom:12px;">
+          <div class="score-number" id="scoreNumber" style="font-size:28px; margin-bottom:4px;">0</div>
+          <div class="score-label" id="scoreLabel" style="font-size:14px; margin-bottom:4px;">Vink items aan</div>
+          <div class="score-advice" id="scoreAdvice" style="font-size:12px;">Maximumscore: 50 punten</div>
+        </div>
+        <button class="primary" id="saveChecklistBtn" style="width:100%;" onclick="saveChecklist()">Checklist opslaan voor vandaag</button>
+        <div id="todayChecklistInfo" style="margin-top:8px; font-size:12px; color:#94a3b8; text-align:center;"></div>
+      </div>
+      
       <div class="card">
         <h2>Pre-Market Checklist</h2>
         <div class="info-box">
           Vul dit elke ochtend in voor je markt opent. Onder 30 punten of een gefaalde kritieke factor = geen live trading vandaag.
         </div>
         <div id="checklistItems"></div>
-      </div>
-      
-      <div class="card" id="scoreCard">
-        <div id="scoreDisplay" class="score-display">
-          <div class="score-number" id="scoreNumber">0</div>
-          <div class="score-label" id="scoreLabel">Vink items aan</div>
-          <div class="score-advice" id="scoreAdvice">Maximumscore: 45 punten</div>
-        </div>
-        <button class="primary" id="saveChecklistBtn" style="width:100%;" onclick="saveChecklist()">Checklist opslaan voor vandaag</button>
-        <div id="todayChecklistInfo" style="margin-top:12px; font-size:13px; color:#94a3b8; text-align:center;"></div>
       </div>
     </div>
   </div>
@@ -501,12 +501,18 @@
       <div class="form-grid">
         <div class="form-group">
           <label>Instrument</label>
-          <select id="tradeInstrument">
+          <select id="tradeInstrument" onchange="handleInstrumentChange()">
             <option value="DAX">DAX</option>
-            <option value="US100">US100</option>
-            <option value="US30">US30</option>
+            <option value="UK100">UK100</option>
             <option value="XAU">XAU (Goud)</option>
+            <option value="US30">US30</option>
+            <option value="US100">US100</option>
+            <option value="US500">US500</option>
+            <!-- CUSTOM_INSTRUMENTS_PLACEHOLDER -->
+            <option value="__custom__">+ Nieuw aandeel toevoegen...</option>
+            <option value="ander">Ander (eenmalig)</option>
           </select>
+          <input type="text" id="tradeInstrumentCustom" placeholder="Naam aandeel/instrument" style="display:none; margin-top:6px;">
         </div>
         <div class="form-group">
           <label>Richting</label>
@@ -567,12 +573,11 @@
           <label>Setup type</label>
           <select id="tradeSetup" onchange="renderStrategyChecklist()">
             <option value="">-- Kies setup --</option>
-            <option value="hod-lod-breakout">HOD/LOD Breakout (Steve)</option>
-            <option value="reversal">Reversal (Steve)</option>
-            <option value="break-retest">Break & Retest (Steve)</option>
-            <option value="xau-morning-star">XAU Morning Star (David)</option>
-            <option value="ict-fvg">ICT / FVG / Liquidity (eigen)</option>
-            <option value="ander">Ander</option>
+            <option value="break-retest">Break & Retest</option>
+            <option value="reversal">Reversal</option>
+            <option value="vwap-bounce">VWAP Bounce</option>
+            <option value="orb">Opening Range Breakout</option>
+            <option value="hod-lod-breakout">HOD/LOD Breakout</option>
           </select>
         </div>
         <div class="form-group">
@@ -583,31 +588,147 @@
             <option value="nee">Nee, geïmproviseerd</option>
           </select>
         </div>
+        <div class="form-group">
+          <label>Verbeterpunt</label>
+          <select id="tradeImprovement">
+            <option value="">-- Selecteer (optioneel) --</option>
+            <option value="setup_correct">Setup was correct, geen verbeterpunten</option>
+            <option value="entry_too_early">Entry te vroeg genomen</option>
+            <option value="entry_too_late">Entry te laat genomen</option>
+            <option value="sl_too_tight">Stoploss te strak</option>
+            <option value="sl_moved_too_fast">Stoploss te snel opgeschoven (wachten tot 1:1 RR)</option>
+            <option value="tp_too_fast">Take profit te snel gepakt</option>
+            <option value="tp_too_far">Take profit te ver weg</option>
+          </select>
+        </div>
+      </div>
+      
+      <h3>Trade Analyse</h3>
+      <div class="info-box" style="font-size:12px;">Deze gegevens worden gebruikt voor statistieken en patroon-analyse per instrument.</div>
+      <div class="form-grid">
+        <div class="form-group">
+          <label>Mee met daily trend?</label>
+          <select id="evalDailyTrend">
+            <option value="">-- Selecteer --</option>
+            <option value="ja">Ja</option>
+            <option value="nee">Nee</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Op welk level?</label>
+          <select id="evalLevel">
+            <option value="">-- Selecteer --</option>
+            <option value="YH">Yesterday High (YH)</option>
+            <option value="YL">Yesterday Low (YL)</option>
+            <option value="AsiaH">Asia High</option>
+            <option value="AsiaL">Asia Low</option>
+            <option value="other_key">Ander key level</option>
+            <option value="none">Geen level</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Trade tov level</label>
+          <select id="evalLevelPrecision">
+            <option value="">-- Selecteer --</option>
+            <option value="exact">Exact op het level</option>
+            <option value="near">In de buurt van het level</option>
+            <option value="far">Niet bij een level</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Indexen in de rug?</label>
+          <select id="evalIndices">
+            <option value="">-- Selecteer --</option>
+            <option value="ja">Ja</option>
+            <option value="nee">Nee</option>
+            <option value="mixed">Gemengd</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Timeframe entry</label>
+          <select id="evalTimeframe">
+            <option value="">-- Selecteer --</option>
+            <option value="1min">1 min</option>
+            <option value="2min">2 min</option>
+            <option value="3min">3 min</option>
+            <option value="5min">5 min</option>
+            <option value="15min">15 min</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Hammercandle aanwezig?</label>
+          <select id="evalHammer">
+            <option value="">-- Selecteer --</option>
+            <option value="ja">Ja</option>
+            <option value="nee">Nee</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Indien uitgetikt</label>
+          <select id="evalStoppedOut">
+            <option value="">-- Selecteer (alleen bij verlies) --</option>
+            <option value="went_after">Uitgetikt, trade vertrok daarna alsnog</option>
+            <option value="never_worked">Uitgetikt, trade deed nooit wat zou moeten</option>
+            <option value="not_applicable">Niet uitgetikt / N/A</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>9 EMA invloed?</label>
+          <select id="evalEma">
+            <option value="">-- Selecteer --</option>
+            <option value="positive">Ja, positief (steun/weerstand werkte)</option>
+            <option value="negative">Ja, negatief (extensie / fake-out)</option>
+            <option value="neutral">Geen merkbare invloed</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>VWAP invloed?</label>
+          <select id="evalVwap">
+            <option value="">-- Selecteer --</option>
+            <option value="positive">Ja, positief (steun/weerstand werkte)</option>
+            <option value="negative">Ja, negatief (door VWAP gebroken)</option>
+            <option value="neutral">Geen merkbare invloed</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Exit strategie</label>
+          <select id="evalExit">
+            <option value="">-- Selecteer --</option>
+            <option value="2R_secured">2R gepakt (op veilig gespeeld)</option>
+            <option value="trailed_sl">SL meeverschoven (laten lopen)</option>
+            <option value="manual_exit">Handmatig gesloten (gevoelsmatig)</option>
+            <option value="stopped_out">Stop loss geraakt</option>
+            <option value="full_target">Volledige target gehaald</option>
+          </select>
+        </div>
       </div>
       
       <h3>Emoties</h3>
+      <div class="info-box" style="margin-bottom:12px; font-size:12px;">
+        Op alle schalen: <strong>1 = goed/weinig, 10 = slecht/veel</strong> (behalve Vertrouwen: 1 = weinig vertrouwen, 10 = veel vertrouwen)
+      </div>
       <div class="emotion-slider">
-        <label>Stress (voor):</label>
+        <label>Stress vooraf (1=rustig, 10=gestresst):</label>
         <input type="range" id="emotionStress" min="1" max="10" value="5" oninput="document.getElementById('emotionStressVal').textContent=this.value">
         <span class="slider-value" id="emotionStressVal">5</span>
       </div>
       <div class="emotion-slider">
-        <label>Vertrouwen (voor):</label>
+        <label>Vertrouwen vooraf (1=laag, 10=hoog):</label>
         <input type="range" id="emotionConfidence" min="1" max="10" value="5" oninput="document.getElementById('emotionConfidenceVal').textContent=this.value">
         <span class="slider-value" id="emotionConfidenceVal">5</span>
       </div>
       <div class="emotion-slider">
-        <label>FOMO (voor):</label>
+        <label>FOMO vooraf (1=geen, 10=heel hoog):</label>
         <input type="range" id="emotionFomo" min="1" max="10" value="3" oninput="document.getElementById('emotionFomoVal').textContent=this.value">
         <span class="slider-value" id="emotionFomoVal">3</span>
       </div>
       <div class="emotion-slider">
-        <label>Frustratie (na):</label>
+        <label>Frustratie na (1=geen, 10=heel hoog):</label>
         <input type="range" id="emotionFrustration" min="1" max="10" value="3" oninput="document.getElementById('emotionFrustrationVal').textContent=this.value">
         <span class="slider-value" id="emotionFrustrationVal">3</span>
       </div>
       <div class="emotion-slider">
-        <label>Tevredenheid (na):</label>
+        <label>Tevredenheid na (1=ontevreden, 10=zeer tevreden):</label>
         <input type="range" id="emotionSatisfaction" min="1" max="10" value="5" oninput="document.getElementById('emotionSatisfactionVal').textContent=this.value">
         <span class="slider-value" id="emotionSatisfactionVal">5</span>
       </div>
@@ -732,124 +853,28 @@ const CHECKLIST_ITEMS = [
   { id: 'alcohol', label: 'Geen alcohol gisteravond (of >12u geleden)', points: 5, group: 'critical', deal_breaker: true },
   { id: 'mental', label: 'Mentaal stabiel (geen ruzie, acute stress, emotionele dip)', points: 5, group: 'critical', deal_breaker: true },
   { id: 'alone', label: 'Alleen in het kantoor / niet afgeleid', points: 5, group: 'critical', deal_breaker: true },
-  { id: 'no_revenge', label: 'Geen "ik moet vandaag goedmaken" gevoel', points: 5, group: 'critical', deal_breaker: true },
+  { id: 'recent_market', label: 'Niet langer dan 3 dagen geleden de markt bestudeerd', points: 5, group: 'critical', deal_breaker: true },
+  { id: 'strategic_reminder', label: 'Strategische reminder gelezen', points: 5, group: 'critical', deal_breaker: true },
   // Medium (3 points each)
-  { id: 'breakfast', label: 'Gezond ontbeten', points: 3, group: 'medium' },
   { id: 'walk', label: 'Wandeling van 20+ min gemaakt', points: 3, group: 'medium' },
   { id: 'plan_ready', label: 'Trading plan en levels voor vandaag voorbereid', points: 3, group: 'medium' },
   { id: 'agenda', label: 'Economische agenda gecheckt', points: 3, group: 'medium' },
   { id: 'no_news', label: 'Geen grote red-flag news events tijdens sessie', points: 3, group: 'medium' },
+  { id: 'prev_journal', label: 'Vorige trading dag goed afgesloten (journal ingevuld)', points: 3, group: 'medium' },
   // Light (1 point each)
+  { id: 'breakfast', label: 'Gezond ontbeten', points: 1, group: 'light' },
   { id: 'desk', label: 'Bureau opgeruimd', points: 1, group: 'light' },
   { id: 'phone', label: 'Telefoon op stil/weg', points: 1, group: 'light' },
   { id: 'water', label: 'Water binnen handbereik', points: 1, group: 'light' },
-  { id: 'no_pressure', label: 'Geen tijdsdruk (geen afspraak komende 3u)', points: 1, group: 'light' },
-  { id: 'prev_journal', label: 'Vorige trading dag goed afgesloten (journal ingevuld)', points: 1, group: 'light' }
+  { id: 'no_pressure', label: 'Geen tijdsdruk (geen afspraak komende 3u)', points: 1, group: 'light' }
 ];
 
 const MAX_SCORE = CHECKLIST_ITEMS.reduce((s, i) => s + i.points, 0);
 
 // ==================== STRATEGY CHECKLISTS ====================
 const STRATEGY_CHECKLISTS = {
-  'hod-lod-breakout': {
-    name: 'HOD/LOD Breakout (Steve)',
-    description: 'High of Day / Low of Day breakout strategie. Werkt het best na gaps >2% en sterke trend.',
-    sections: [
-      {
-        title: 'Context & Trend',
-        critical: true,
-        items: [
-          'Daily trend duidelijk bepaald (mee met de trend traden)',
-          'Gap > 2% (tussen close en open, niet wiks)',
-          'Gap richting volgt daily trend',
-          'Indexen (US500) in de rug (tenzij earnings/news)',
-          'Nieuws gecheckt op Yahoo Finance / Benzinga'
-        ]
-      },
-      {
-        title: 'Setup & Levels',
-        critical: true,
-        items: [
-          'Levels getekend op urengrafiek',
-          'Laatste highs/lows op urenchart geïdentificeerd',
-          'Geen levels in de weg (vrije lucht)',
-          'Pullback groot genoeg (minimaal 50% retracement)',
-          'Break en retest geconfirmeerd op 5min TF',
-          'Candle gesloten boven/onder level (niet alleen wik)'
-        ]
-      },
-      {
-        title: 'Volatiliteit & Extensie',
-        critical: false,
-        items: [
-          'ATR tussen 80-120%',
-          'Niet te ver van 9EMA (geen extreme extensie)',
-          'VWAP-extensie gecheckt',
-          'Ruimte naar target (minimum 2R)'
-        ]
-      },
-      {
-        title: 'Entry & Risk',
-        critical: true,
-        items: [
-          'Entry na sluiten van retest-candle (5min TF)',
-          'Stop loss bepaald (in lijn met ATR, 10-20%)',
-          'SL geplaatst op 3min TF',
-          'Risk/Reward minimum 1:2',
-          'Positiegrootte berekend op basis van risico-regel'
-        ]
-      }
-    ]
-  },
-  'reversal': {
-    name: 'Reversal (Steve)',
-    description: 'Reversal in richting van hoofdtrend, op support/resistance levels. Tegen de korte-termijn beweging.',
-    sections: [
-      {
-        title: 'Trend & Context',
-        critical: true,
-        items: [
-          'Reversal is in richting van de hoofdtrend (daily)',
-          'Op een duidelijk support of resistance level',
-          'Voldoende ruimte tot volgend level of VWAP',
-          'Indexen ondersteunen de richting',
-          'Geen aankomend high-impact nieuws'
-        ]
-      },
-      {
-        title: 'Reversal Setup',
-        critical: true,
-        items: [
-          'LH (lagere high) of HL (hogere low) gevormd',
-          'Hammer candle / pin bar op 3 of 5 min TF',
-          'Bij short: prijs mag boven lijn geweest zijn, NIET eronder',
-          'Bij long: prijs mag onder lijn geweest zijn, NIET erboven',
-          'Bevestigingscandle in reversal-richting'
-        ]
-      },
-      {
-        title: 'Volatiliteit',
-        critical: false,
-        items: [
-          'ATR tussen 80-110%',
-          'Niet in extreme extensie van EMA (intraday)',
-          'Geen fake-out signalen op lower TF (5/15min)'
-        ]
-      },
-      {
-        title: 'Entry & Risk',
-        critical: true,
-        items: [
-          'SL in lijn met ATR (10-20%)',
-          'Fibonacci 50% retracement op level (extra confirmatie)',
-          'R/R minimum 1:2',
-          'Positiegrootte correct berekend'
-        ]
-      }
-    ]
-  },
   'break-retest': {
-    name: 'Break & Retest (Steve)',
+    name: 'Break & Retest',
     description: 'Level breekt duidelijk, prijs komt terug om te testen, dan instappen in richting van break.',
     sections: [
       {
@@ -897,103 +922,176 @@ const STRATEGY_CHECKLISTS = {
       }
     ]
   },
-  'xau-morning-star': {
-    name: 'XAU Morning Star (David)',
-    description: 'Goud-specifieke setup. Hard valende prijs, hammer als bodem, krachtige rebound.',
+  'reversal': {
+    name: 'Reversal',
+    description: 'Reversal in richting van hoofdtrend, op support/resistance levels. Tegen de korte-termijn beweging.',
     sections: [
       {
-        title: 'Timing & Context',
+        title: 'Trend & Context',
         critical: true,
         items: [
-          'Tijdsblok 6-11u of 14-22u (beste XAU uren)',
-          'Vanaf 12u: grote bewegingen mogelijk',
-          'Levels intekenen op urenchart',
-          'Economic calendar gecheckt (PMI, werkloosheid, FOMC)',
-          'Niet te ver van 9EMA op daily (geen extensie)'
+          'Reversal is in richting van de hoofdtrend (daily)',
+          'Op een duidelijk support of resistance level',
+          'Voldoende ruimte tot volgend level of VWAP',
+          'Indexen ondersteunen de richting',
+          'Geen aankomend high-impact nieuws'
         ]
       },
       {
-        title: 'Morning Star Patroon',
+        title: 'Reversal Setup',
         critical: true,
         items: [
-          'Prijs valt hard (eerste candle door level)',
-          'Bodem-candle is hammer met lange wik onderaan',
-          'Bodem stijgt iets boven het level terug',
-          'Volgende candle breekt HARD omhoog (2 of 3 min TF)',
-          'Als bevestigingscandle niet hard breekt: NIET traden'
+          'LH (lagere high) of HL (hogere low) gevormd',
+          'Hammer candle / pin bar op 3 of 5 min TF',
+          'Bij short: prijs mag boven lijn geweest zijn, NIET eronder',
+          'Bij long: prijs mag onder lijn geweest zijn, NIET erboven',
+          'Bevestigingscandle in reversal-richting'
         ]
       },
       {
-        title: 'Volume & Confluentie',
+        title: 'Volatiliteit',
         critical: false,
         items: [
-          'Volume neemt af bij dalen',
-          'Volume stijgt bij omkeer naar long',
-          'Bounce op VWAP (extra trigger)',
-          'Fibonacci 50% retracement (bonus)',
-          'CHF correlatie ondersteunt richting',
-          '3 belangrijkste: 50% Fib, 9EMA, retest'
+          'ATR tussen 80-110%',
+          'Niet in extreme extensie van EMA (intraday)',
+          'Geen fake-out signalen op lower TF (5/15min)'
         ]
       },
       {
         title: 'Entry & Risk',
         critical: true,
         items: [
-          'Pullback was 10-15 dollar (idealiter)',
-          'Stop loss MAX 15-20 dollar (ruim, maar niet groter)',
-          'Range-context (vaak in range, uitbraak = kans)',
-          'Niet traden bij extreme daily-extensie van 9EMA'
+          'SL in lijn met ATR (10-20%)',
+          'Fibonacci 50% retracement op level (extra confirmatie)',
+          'R/R minimum 1:2',
+          'Positiegrootte correct berekend'
         ]
       }
     ]
   },
-  'ict-fvg': {
-    name: 'ICT / FVG / Liquidity (eigen)',
-    description: 'NY-open strategie met Asia/London session levels, Fair Value Gaps en liquidity.',
+  'vwap-bounce': {
+    name: 'VWAP Bounce',
+    description: 'Prijs trekt terug naar VWAP en stuitert af in richting van de trend.',
     sections: [
       {
-        title: 'Voorbereiding (vanaf 14u)',
+        title: 'Context',
         critical: true,
         items: [
-          'Week high en low aangeduid',
-          'Open van deze week aangeduid',
-          'Yesterday high & low getekend',
-          'Previous month high & low',
-          'Asia session (12u-6u NL) high & low',
-          'London session (6u-14u NL) high & low'
+          'Trending markt (geen choppy range)',
+          'Daily trend duidelijk',
+          'Prijs heeft VWAP eerder vandaag gerespecteerd',
+          'Indexen in dezelfde richting',
+          'Geen high-impact nieuws komend'
         ]
       },
       {
-        title: 'Range Analyse',
+        title: 'VWAP Setup',
         critical: true,
         items: [
-          'Meetlatje tussen Asia en London high/low',
-          'Asia-levels al geraakt tijdens London? → niet meer interessant',
-          'Liquiditeit-pools geïdentificeerd',
-          'Fair Value Gaps (FVG) op hogere TF gemarkeerd'
+          'Prijs trekt terug richting VWAP (pullback)',
+          'VWAP fungeert als dynamische support/resistance',
+          'Niet recht door VWAP gebroken (anders is het geen bounce)',
+          'Pullback ~50% van laatste impulsbeweging',
+          'Confluentie: VWAP + level / 9EMA / Fib 50%'
         ]
       },
       {
-        title: 'NY Open Setup (vanaf 15:30)',
+        title: 'Entry & Confirmatie',
         critical: true,
         items: [
-          'Eerste 15min candle vanaf 15:30 als referentielevels',
-          'FVG op 1min die het level breekt geïdentificeerd',
-          'Plan voor zowel long als short klaar (beide richtingen!)',
-          'Volume weergegeven (versterkt richting)',
-          'Op 5min kijken, instappen op 1min'
+          'Bevestigingscandle (hammer/pin bar) op 3-5min TF bij VWAP',
+          'Volume neemt af bij pullback, stijgt bij bounce',
+          'Entry boven/onder bevestigingscandle',
+          'SL net voorbij VWAP (op 3min TF)',
+          'R/R minimum 1:2 naar volgend level'
+        ]
+      }
+    ]
+  },
+  'orb': {
+    name: 'Opening Range Breakout',
+    description: 'Eerste 15-30 min vormt de opening range; breakout in trendrichting traden.',
+    sections: [
+      {
+        title: 'Voorbereiding',
+        critical: true,
+        items: [
+          'Eerste 15min (of 30min) candle vanaf sessie-open afgewacht',
+          'High en low van opening range duidelijk gemarkeerd',
+          'Daily trend bepaald (breakout met trend = sterker)',
+          'Levels eromheen (YH, YL, Asia) gecheckt',
+          'Geen high-impact nieuws in eerste uur'
+        ]
+      },
+      {
+        title: 'Breakout Kwaliteit',
+        critical: true,
+        items: [
+          'Prijs breekt high of low van opening range duidelijk',
+          'Candle sluit voorbij het level (niet alleen wik)',
+          'Volume bij de breakout',
+          'Niet in extreme extensie van 9EMA',
+          'Indexen ondersteunen de richting'
         ]
       },
       {
         title: 'Entry & Risk',
         critical: true,
         items: [
-          'Wachten op retest van FVG / break-level',
-          'Niet weg-van-gap traden bij laag volume',
-          'Reversal alleen bij voldoende volume',
-          'Double top/bottom als extra confirmatie',
-          'Trade-window: 14:30 - 17:30 (15:30 = vaak cijfers)',
-          'SL op 3min TF, R/R min 1:2'
+          'Entry op breakout sluiting OF na retest van level',
+          'SL aan andere kant van opening range (of dichter na retest)',
+          'R/R minimum 1:2 naar volgend key level',
+          'Positie groot genoeg voor zinvolle target maar binnen 1% risk'
+        ]
+      }
+    ]
+  },
+  'hod-lod-breakout': {
+    name: 'HOD/LOD Breakout',
+    description: 'High of Day / Low of Day breakout. Werkt het best na gaps >2% en sterke trend.',
+    sections: [
+      {
+        title: 'Context & Trend',
+        critical: true,
+        items: [
+          'Daily trend duidelijk bepaald (mee met de trend traden)',
+          'Gap > 2% (tussen close en open, niet wiks) - bonus indien aanwezig',
+          'Gap richting volgt daily trend',
+          'Indexen (US500) in de rug (tenzij earnings/news)',
+          'Nieuws gecheckt op Yahoo Finance / Benzinga'
+        ]
+      },
+      {
+        title: 'Setup & Levels',
+        critical: true,
+        items: [
+          'Levels getekend op urengrafiek',
+          'Laatste highs/lows op urenchart geïdentificeerd',
+          'Geen levels in de weg (vrije lucht)',
+          'Pullback groot genoeg (minimaal 50% retracement)',
+          'Break en retest geconfirmeerd op 5min TF',
+          'Candle gesloten boven/onder level (niet alleen wik)'
+        ]
+      },
+      {
+        title: 'Volatiliteit & Extensie',
+        critical: false,
+        items: [
+          'ATR tussen 80-120%',
+          'Niet te ver van 9EMA (geen extreme extensie)',
+          'VWAP-extensie gecheckt',
+          'Ruimte naar target (minimum 2R)'
+        ]
+      },
+      {
+        title: 'Entry & Risk',
+        critical: true,
+        items: [
+          'Entry na sluiten van retest-candle (5min TF)',
+          'Stop loss bepaald (in lijn met ATR, 10-20%)',
+          'SL geplaatst op 3min TF',
+          'Risk/Reward minimum 1:2',
+          'Positiegrootte berekend op basis van risico-regel (max 1%)'
         ]
       }
     ]
@@ -1001,72 +1099,81 @@ const STRATEGY_CHECKLISTS = {
 };
 
 // ==================== PRE-TRADE CHECKS ====================
+// Two sections: 'general' = strategic reminder, done before trading session starts
+//               'per_trade' = checked just before placing each trade
 const PRE_TRADE_CHECKS = [
+  // ALGEMEEN - voor de sessie (kritiek)
   {
     id: 'no_news',
     label: 'Geen nieuws / earnings het komende uur',
     detail: 'Check op tradingeconomics.com (3-sterren, Duitsland/UK/US) of forexfactory.com',
-    critical: true
-  },
-  {
-    id: 'with_trend',
-    label: 'Trade gaat MEE met de daily trend',
-    detail: 'Tegen-trend trades zijn alleen aan te raden bij specifieke reversal-setups op support/resistance',
+    section: 'general',
     critical: true
   },
   {
     id: 'levels_drawn',
-    label: 'YH, YL, Asia high/low en andere levels aangeduid',
+    label: 'YH, YL, Asia high/low en andere key levels aangeduid',
     detail: 'Yesterday high/low, Asia session high/low, week levels, month levels',
+    section: 'general',
     critical: true
   },
+  
+  // PER TRADE - vlak voor instappen
   {
-    id: 'vwap_position',
-    label: 'VWAP-positie gecheckt (boven/onder, op minuten TF)',
-    detail: 'Positie t.o.v. VWAP bevestigt of contradicteert de richting',
+    id: 'with_trend',
+    label: 'Trade gaat MEE met de daily trend',
+    detail: 'Tegen-trend trades zijn alleen aan te raden bij specifieke reversal-setups op support/resistance',
+    section: 'per_trade',
     critical: false
   },
   {
-    id: 'ema_position',
-    label: 'EMA positie gecheckt (geen extreme extensie)',
-    detail: 'Vooral op D TF. Bij extensie: geen break&retest. Let op fake-outs op 5/15min.',
+    id: 'ema_9',
+    label: '9 EMA gecheckt (geen extreme extensie)',
+    detail: 'Bij extensie: geen break&retest. Let op fake-outs op 5/15min.',
+    section: 'per_trade',
+    critical: false
+  },
+  {
+    id: 'vwap_position',
+    label: 'VWAP gecheckt (positie & afstand)',
+    detail: 'Boven/onder VWAP, en niet te ver weg ervan',
+    section: 'per_trade',
     critical: false
   },
   {
     id: 'rr_room',
-    label: 'Minimaal 2R ruimte naar target',
+    label: 'Minimaal 2R haalbaar',
     detail: 'Reken voor: afstand naar volgend level / EMA / VWAP. Geen ruimte = geen trade.',
-    critical: true
+    section: 'per_trade',
+    critical: false
   },
   {
     id: 'atr_ok',
-    label: 'ATR laat de trade nog toe',
-    detail: 'ATR tussen 80-120% (alleen op D en 4u TF betrouwbaar). Te hoog = al uitgespeeld.',
+    label: 'ATR nog niet bereikt',
+    detail: 'Te hoog = al uitgespeeld. Alleen op D en 4u TF betrouwbaar.',
+    section: 'per_trade',
     critical: false
   },
   {
     id: 'hammer_candle',
-    label: 'Bevestigingscandle gespot (hammer / pin op 3 of 5min TF)',
-    detail: 'Of andere setup-specifieke confirmatie. Niet zomaar "het ziet er goed uit".',
-    critical: false
-  },
-  {
-    id: 'indices_check',
-    label: 'Andere grote indexen gecheckt (US500, US100, US30)',
-    detail: 'Lopen ze in dezelfde richting? Divergentie = waarschuwing.',
+    label: 'Hammer candle confirmation',
+    detail: 'Hammer / pin op 3 of 5min TF, of andere setup-specifieke confirmatie',
+    section: 'per_trade',
     critical: false
   },
   {
     id: 'risk_1pct',
-    label: 'Risk maximaal 1% van mijn drawdown',
-    detail: 'Op een €360k account met X% drawdown beschikbaar: bereken vooraf je max €-risico per trade.',
-    critical: true
+    label: 'Risk Unit maximaal 1%',
+    detail: 'Bereken vooraf je max €-risico per trade. Bij halve risk-day: 0.5%.',
+    section: 'per_trade',
+    critical: false
   },
   {
     id: 'sl_correct',
-    label: 'Stop loss correct geplaatst (op 3min TF)',
+    label: 'Stop loss kan correct geplaatst worden',
     detail: 'Logische plaats (achter level/wik/structuur), niet willekeurig dichtbij om size te vergroten.',
-    critical: true
+    section: 'per_trade',
+    critical: false
   }
 ];
 
@@ -1175,10 +1282,11 @@ const cloudStorage = {
     if (error) { console.error(error); return null; }
     return data;
   },
-  async upsert(table, record) {
+  async upsert(table, record, onConflict) {
     if (!sb || !currentUser) return null;
     record.user_id = currentUser.id;
-    const { data, error } = await sb.from(table).upsert(record).select();
+    const opts = onConflict ? { onConflict } : {};
+    const { data, error } = await sb.from(table).upsert(record, opts).select();
     if (error) throw error;
     return data;
   },
@@ -1194,7 +1302,7 @@ let state = {
   trades: [],
   checklistHistory: [],
   dayReviews: [],
-  settings: { maxTrades: 3, dailyLoss: 500, riskPerTrade: 1 }
+  settings: { maxTrades: 3, dailyLoss: 500, riskPerTrade: 1, customInstruments: [] }
 };
 
 const today = () => new Date().toISOString().split('T')[0];
@@ -1310,14 +1418,10 @@ function updateScore() {
     display.classList.add('nogo');
     labelEl.textContent = '🚫 GEEN TRADING VANDAAG';
     adviceEl.textContent = `Score onder 30. Werk aan de basis vandaag, geen trading.`;
-  } else if (score < 38) {
-    display.classList.add('caution');
-    labelEl.textContent = '⚠️ ENKEL SIM TRADING';
-    adviceEl.textContent = `Score 30-37. Alleen demo/sim trading toegestaan vandaag.`;
   } else if (score < 40) {
     display.classList.add('caution');
-    labelEl.textContent = '⚠️ LIVE MET HALVE SIZE';
-    adviceEl.textContent = `Score 38-39. Live mag, maar verklein positiegrootte met 50%.`;
+    labelEl.textContent = '⚠️ TRADEN MET HALVE RISK UNIT';
+    adviceEl.textContent = `Score ${score}/${MAX_SCORE}. Live mag, maar verklein je risico per trade tot 50% (halve risk unit).`;
   } else {
     display.classList.add('go');
     labelEl.textContent = '✅ LIVE TRADING OK';
@@ -1326,6 +1430,13 @@ function updateScore() {
 }
 
 async function saveChecklist() {
+  // Confirmation if a checklist already exists for today
+  if (state.todayChecklist) {
+    if (!confirm('Er bestaat al een ingevulde checklist voor vandaag. Wil je deze overschrijven?')) {
+      return;
+    }
+  }
+  
   const checks = {};
   let score = 0;
   let criticalFailed = false;
@@ -1344,11 +1455,11 @@ async function saveChecklist() {
     score,
     maxScore: MAX_SCORE,
     criticalFailed,
-    status: criticalFailed || score < 30 ? 'no-trade' : score < 38 ? 'sim-only' : score < 40 ? 'live-half-size' : 'live-full'
+    status: criticalFailed || score < 30 ? 'no-trade' : score < 40 ? 'live-half-size' : 'live-full'
   };
   
   try {
-    await cloudStorage.upsert('checklists', { date: today(), data: checklist });
+    await cloudStorage.upsert('checklists', { date: today(), data: checklist }, 'user_id,date');
     state.todayChecklist = checklist;
     
     // Update history
@@ -1477,8 +1588,15 @@ function renderPreTradeCheck() {
   const container = document.getElementById('preTradeChecksContainer');
   if (!container) return;
   
+  const generalChecks = PRE_TRADE_CHECKS.filter(c => c.section === 'general');
+  const perTradeChecks = PRE_TRADE_CHECKS.filter(c => c.section === 'per_trade');
+  
   let html = '';
-  PRE_TRADE_CHECKS.forEach(check => {
+  
+  // General section
+  html += '<h3 style="margin-top:0; color:#f1f5f9;">📋 Algemeen (strategische reminder)</h3>';
+  html += '<div class="info-box">Doorloop deze punten <strong>vóór</strong> de sessie. Je hebt hier tijd voor.</div>';
+  generalChecks.forEach(check => {
     const checked = currentPreTradeCheck[check.id] ? 'checked' : '';
     const borderColor = check.critical ? '#ef4444' : '#f59e0b';
     const tag = check.critical ? '<span style="color:#ef4444; font-size:10px; margin-left:8px; padding:2px 6px; background:rgba(239,68,68,0.15); border-radius:3px;">KRITIEK</span>' : '';
@@ -1492,6 +1610,24 @@ function renderPreTradeCheck() {
       </div>
     </div>`;
   });
+  
+  // Per-trade section
+  html += '<h3 style="margin-top:24px; color:#f1f5f9;">⚡ Per Trade (vlak voor instappen)</h3>';
+  html += '<div class="info-box">Loop deze door net voor je een trade plaatst.</div>';
+  perTradeChecks.forEach(check => {
+    const checked = currentPreTradeCheck[check.id] ? 'checked' : '';
+    const borderColor = check.critical ? '#ef4444' : '#64748b';
+    html += `<div class="card" style="background:#0f172a; padding:14px; margin-bottom:10px; border-left:3px solid ${borderColor}; cursor:pointer;" onclick="togglePreTradeCheck('${check.id}', event)">
+      <div style="display:flex; align-items:flex-start; gap:12px;">
+        <input type="checkbox" id="pt-${check.id}" ${checked} onclick="event.stopPropagation(); togglePreTradeCheck('${check.id}')" style="margin-top:3px; width:20px; height:20px; accent-color:#3b82f6; cursor:pointer;">
+        <div style="flex:1;">
+          <label for="pt-${check.id}" style="font-weight:600; color:#f1f5f9; cursor:pointer; display:block; margin-bottom:4px;">${check.label}</label>
+          <div style="font-size:12px; color:#94a3b8; line-height:1.4;">${check.detail}</div>
+        </div>
+      </div>
+    </div>`;
+  });
+  
   container.innerHTML = html;
   updatePreTradeScore();
 }
@@ -1565,6 +1701,70 @@ function getPreTradeCheckData() {
   return result;
 }
 
+// ==================== INSTRUMENT HANDLING ====================
+function handleInstrumentChange() {
+  const select = document.getElementById('tradeInstrument');
+  const customInput = document.getElementById('tradeInstrumentCustom');
+  if (select.value === '__custom__') {
+    customInput.style.display = 'block';
+    customInput.focus();
+  } else {
+    customInput.style.display = 'none';
+    customInput.value = '';
+  }
+}
+
+function getInstrumentValue() {
+  const select = document.getElementById('tradeInstrument');
+  if (select.value === '__custom__') {
+    const customVal = document.getElementById('tradeInstrumentCustom').value.trim().toUpperCase();
+    if (customVal) {
+      // Add to known custom instruments if not already there
+      if (!state.settings.customInstruments) state.settings.customInstruments = [];
+      if (!state.settings.customInstruments.includes(customVal)) {
+        state.settings.customInstruments.push(customVal);
+        // Persist async (don't block save)
+        cloudStorage.upsert('settings', { user_id: currentUser.id, data: state.settings }, 'user_id').catch(e => console.error('Settings save failed:', e));
+        renderInstrumentOptions();
+      }
+      return customVal;
+    }
+    return 'CUSTOM';
+  }
+  return select.value;
+}
+
+function renderInstrumentOptions() {
+  const select = document.getElementById('tradeInstrument');
+  if (!select) return;
+  
+  const currentValue = select.value;
+  const customs = (state.settings && state.settings.customInstruments) || [];
+  
+  // Build the placeholder section with custom instruments
+  let customOptions = '';
+  customs.forEach(ci => {
+    customOptions += `<option value="${ci}">${ci}</option>`;
+  });
+  
+  select.innerHTML = `
+    <option value="DAX">DAX</option>
+    <option value="UK100">UK100</option>
+    <option value="XAU">XAU (Goud)</option>
+    <option value="US30">US30</option>
+    <option value="US100">US100</option>
+    <option value="US500">US500</option>
+    ${customOptions}
+    <option value="__custom__">+ Nieuw aandeel toevoegen...</option>
+    <option value="ander">Ander (eenmalig)</option>
+  `;
+  
+  // Restore previous selection if still valid
+  if (currentValue && Array.from(select.options).some(o => o.value === currentValue)) {
+    select.value = currentValue;
+  }
+}
+
 // ==================== TRADES ====================
 async function saveTrade() {
   const pnl = parseFloat(document.getElementById('tradePnL').value) || 0;
@@ -1579,7 +1779,7 @@ async function saveTrade() {
     id: `t_${Date.now()}_${Math.random().toString(36).substr(2,5)}`,
     timestamp: new Date().toISOString(),
     date: today(),
-    instrument: document.getElementById('tradeInstrument').value,
+    instrument: getInstrumentValue(),
     direction: document.getElementById('tradeDirection').value,
     session: document.getElementById('tradeSession').value,
     timeBlock: document.getElementById('tradeTimeBlock').value,
@@ -1591,6 +1791,19 @@ async function saveTrade() {
     size: parseFloat(document.getElementById('tradeSize').value) || 1,
     setup: document.getElementById('tradeSetup').value,
     planFollowed: document.getElementById('tradePlanFollowed').value,
+    improvement: document.getElementById('tradeImprovement').value,
+    evaluation: {
+      dailyTrend: document.getElementById('evalDailyTrend').value,
+      level: document.getElementById('evalLevel').value,
+      levelPrecision: document.getElementById('evalLevelPrecision').value,
+      indices: document.getElementById('evalIndices').value,
+      timeframe: document.getElementById('evalTimeframe').value,
+      hammer: document.getElementById('evalHammer').value,
+      stoppedOut: document.getElementById('evalStoppedOut').value,
+      ema: document.getElementById('evalEma').value,
+      vwap: document.getElementById('evalVwap').value,
+      exit: document.getElementById('evalExit').value
+    },
     emotions: {
       stress: parseInt(document.getElementById('emotionStress').value),
       confidence: parseInt(document.getElementById('emotionConfidence').value),
@@ -1620,9 +1833,21 @@ async function saveTrade() {
 }
 
 function clearTradeForm() {
-  ['tradeEntry', 'tradeExit', 'tradeStop', 'tradeTarget', 'tradePnL', 'tradeSize', 'tradeReason', 'tradeLessons'].forEach(id => {
-    document.getElementById(id).value = '';
+  ['tradeEntry', 'tradeExit', 'tradeStop', 'tradeTarget', 'tradePnL', 'tradeSize', 'tradeReason', 'tradeLessons', 'tradeInstrumentCustom'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
   });
+  // Reset all evaluation dropdowns
+  ['tradeImprovement', 'evalDailyTrend', 'evalLevel', 'evalLevelPrecision', 'evalIndices', 'evalTimeframe', 'evalHammer', 'evalStoppedOut', 'evalEma', 'evalVwap', 'evalExit'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+  // Hide custom instrument input
+  const customInput = document.getElementById('tradeInstrumentCustom');
+  if (customInput) customInput.style.display = 'none';
+  // Reset instrument select to first option
+  const instrSelect = document.getElementById('tradeInstrument');
+  if (instrSelect) instrSelect.value = 'DAX';
   // Reset strategy checklist checkboxes
   document.querySelectorAll('input[id^="strat-"]').forEach(cb => cb.checked = false);
   updateStrategyScore();
@@ -1636,8 +1861,8 @@ function updateTradeWarning() {
     warnings.push('<div class="warning-box">⚠️ Je hebt vandaag nog geen <strong>Pre-Market Checklist</strong> ingevuld. Doe dit eerst.</div>');
   } else if (state.todayChecklist.status === 'no-trade') {
     warnings.push('<div class="warning-box">🚫 Je Pre-Market checklist zegt: GEEN TRADING vandaag. Het feit dat je toch wil loggen is een signaal. Heroverweeg.</div>');
-  } else if (state.todayChecklist.status === 'sim-only') {
-    warnings.push('<div class="warning-box">⚠️ Je Pre-Market checklist zegt: enkel SIM trading. Markeer dit duidelijk in notities.</div>');
+  } else if (state.todayChecklist.status === 'live-half-size') {
+    warnings.push('<div class="warning-box">⚠️ Pre-Market score zegt: traden met HALVE risk unit. Verklein je positiegrootte met 50%.</div>');
   }
   
   // Pre-trade check status
@@ -1706,7 +1931,7 @@ async function saveDayReview() {
   };
   
   try {
-    await cloudStorage.upsert('reviews', { date: today(), data: review });
+    await cloudStorage.upsert('reviews', { date: today(), data: review }, 'user_id,date');
     state.dayReviews = state.dayReviews.filter(r => r.date !== today());
     state.dayReviews.push(review);
     showToast('Dag afgesloten');
@@ -1773,6 +1998,13 @@ function renderHistory() {
 }
 
 // ==================== INSIGHTS ====================
+let insightsFilterInstrument = 'all';
+
+function setInsightsFilter(value) {
+  insightsFilterInstrument = value;
+  renderInsights();
+}
+
 function renderInsights() {
   const el = document.getElementById('insightsContent');
   
@@ -1781,21 +2013,42 @@ function renderInsights() {
     return;
   }
   
-  // Overall stats
-  const totalPnL = state.trades.reduce((s, t) => s + t.pnl, 0);
-  const wins = state.trades.filter(t => t.pnl > 0);
-  const losses = state.trades.filter(t => t.pnl < 0);
-  const winRate = wins.length / state.trades.length * 100;
+  // Build instrument filter
+  const instruments = [...new Set(state.trades.map(t => t.instrument))].sort();
+  let filterHtml = '<div style="margin-bottom:20px;"><label style="font-size:13px; color:#94a3b8; margin-right:12px;">Filter op instrument:</label>';
+  filterHtml += `<select onchange="setInsightsFilter(this.value)" style="background:#0f172a; border:1px solid #334155; color:#e2e8f0; padding:8px 12px; border-radius:6px;">`;
+  filterHtml += `<option value="all" ${insightsFilterInstrument==='all'?'selected':''}>Alle instrumenten (${state.trades.length})</option>`;
+  instruments.forEach(inst => {
+    const count = state.trades.filter(t => t.instrument === inst).length;
+    filterHtml += `<option value="${inst}" ${insightsFilterInstrument===inst?'selected':''}>${inst} (${count})</option>`;
+  });
+  filterHtml += '</select></div>';
+  
+  // Filtered trade set
+  const filtered = insightsFilterInstrument === 'all' 
+    ? state.trades 
+    : state.trades.filter(t => t.instrument === insightsFilterInstrument);
+  
+  if (filtered.length < 3) {
+    el.innerHTML = filterHtml + '<div class="empty-state">Minstens 3 trades nodig op dit instrument.</div>';
+    return;
+  }
+  
+  // Overall stats (now using filtered)
+  const totalPnL = filtered.reduce((s, t) => s + t.pnl, 0);
+  const wins = filtered.filter(t => t.pnl > 0);
+  const losses = filtered.filter(t => t.pnl < 0);
+  const winRate = wins.length / filtered.length * 100;
   const avgWin = wins.length > 0 ? wins.reduce((s, t) => s + t.pnl, 0) / wins.length : 0;
   const avgLoss = losses.length > 0 ? losses.reduce((s, t) => s + t.pnl, 0) / losses.length : 0;
   const expectancy = (winRate/100 * avgWin) + ((1 - winRate/100) * avgLoss);
   const profitFactor = losses.length > 0 ? Math.abs(wins.reduce((s,t)=>s+t.pnl,0) / losses.reduce((s,t)=>s+t.pnl,0)) : 0;
   
-  let html = `<div class="insight-grid">
+  let html = filterHtml + `<div class="insight-grid">
     <div class="insight-card">
       <h4>Totale P&L</h4>
       <div class="insight-value ${totalPnL>=0?'pnl-positive':'pnl-negative'}">€${totalPnL.toFixed(2)}</div>
-      <div class="insight-detail">Over ${state.trades.length} trades</div>
+      <div class="insight-detail">Over ${filtered.length} trades</div>
     </div>
     <div class="insight-card">
       <h4>Win Rate</h4>
@@ -1819,44 +2072,100 @@ function renderInsights() {
     </div>
   </div>`;
   
-  // Breakdown by instrument
-  html += '<h3 style="margin-top:24px;">Per Instrument</h3>';
-  html += renderBreakdown('instrument');
+  // Breakdown by instrument (only show when "all")
+  if (insightsFilterInstrument === 'all') {
+    html += '<h3 style="margin-top:24px;">Per Instrument</h3>';
+    html += renderBreakdown('instrument', filtered);
+  }
   
   // Breakdown by session
   html += '<h3 style="margin-top:24px;">Per Sessie</h3>';
-  html += renderBreakdown('session');
+  html += renderBreakdown('session', filtered);
   
   // Breakdown by time block
   html += '<h3 style="margin-top:24px;">Per Tijdsblok</h3>';
-  html += renderBreakdown('timeBlock');
+  html += renderBreakdown('timeBlock', filtered);
   
   // Breakdown by setup
   html += '<h3 style="margin-top:24px;">Per Setup Type</h3>';
-  html += renderBreakdown('setup');
+  html += renderBreakdown('setup', filtered);
   
   // Plan adherence impact
   html += '<h3 style="margin-top:24px;">Plan Gevolgd?</h3>';
-  html += renderBreakdown('planFollowed');
+  html += renderBreakdown('planFollowed', filtered);
+  
+  // Improvement reasons
+  html += '<h3 style="margin-top:24px;">Verbeterpunten</h3>';
+  html += renderBreakdown('improvement', filtered);
+  
+  // Trade evaluation breakdowns (the new dropdowns)
+  html += '<h3 style="margin-top:24px;">📊 Trade Analyse Statistieken</h3>';
+  html += renderEvaluationBreakdown('dailyTrend', 'Mee met daily trend', filtered);
+  html += renderEvaluationBreakdown('level', 'Op welk level', filtered);
+  html += renderEvaluationBreakdown('levelPrecision', 'Precisie op level', filtered);
+  html += renderEvaluationBreakdown('indices', 'Indexen in de rug', filtered);
+  html += renderEvaluationBreakdown('timeframe', 'Timeframe entry', filtered);
+  html += renderEvaluationBreakdown('hammer', 'Hammercandle aanwezig', filtered);
+  html += renderEvaluationBreakdown('stoppedOut', 'Indien uitgetikt', filtered);
+  html += renderEvaluationBreakdown('ema', '9 EMA invloed', filtered);
+  html += renderEvaluationBreakdown('vwap', 'VWAP invloed', filtered);
+  html += renderEvaluationBreakdown('exit', 'Exit strategie', filtered);
   
   // Checklist score correlation
   html += '<h3 style="margin-top:24px;">Checklist Score vs P&L</h3>';
-  html += renderChecklistCorrelation();
+  html += renderChecklistCorrelation(filtered);
   
   // Emotion correlations
   html += '<h3 style="margin-top:24px;">Emotie Correlaties</h3>';
-  html += renderEmotionCorrelations();
+  html += renderEmotionCorrelations(filtered);
   
   // Pattern detection
   html += '<h3 style="margin-top:24px;">🔍 Patronen Gedetecteerd</h3>';
-  html += renderPatterns();
+  html += renderPatterns(filtered);
   
   el.innerHTML = html;
 }
 
-function renderBreakdown(field) {
+function renderEvaluationBreakdown(field, label, trades) {
   const groups = {};
-  state.trades.forEach(t => {
+  trades.forEach(t => {
+    const val = t.evaluation && t.evaluation[field];
+    if (!val) return; // Skip empty
+    if (!groups[val]) groups[val] = { trades: [], pnl: 0, wins: 0 };
+    groups[val].trades.push(t);
+    groups[val].pnl += t.pnl;
+    if (t.pnl > 0) groups[val].wins++;
+  });
+  
+  if (Object.keys(groups).length === 0) {
+    return `<div style="color:#64748b; font-size:13px; margin-bottom:14px; padding:8px;">Geen data voor "${label}".</div>`;
+  }
+  
+  const sorted = Object.entries(groups).sort((a, b) => b[1].pnl - a[1].pnl);
+  const maxPnL = Math.max(...sorted.map(([,d]) => Math.abs(d.pnl)));
+  
+  let html = `<div style="margin-bottom:16px;"><div style="font-weight:600; color:#cbd5e1; margin-bottom:8px; font-size:14px;">${label}</div>`;
+  html += '<div class="card" style="background:#0f172a; padding:12px;">';
+  sorted.forEach(([key, data]) => {
+    const winRate = (data.wins / data.trades.length * 100).toFixed(0);
+    const width = maxPnL > 0 ? Math.abs(data.pnl) / maxPnL * 100 : 0;
+    const avgPnL = (data.pnl / data.trades.length).toFixed(2);
+    html += `<div style="margin-bottom:10px;">
+      <div class="breakdown-row">
+        <span style="font-size:13px;"><strong>${key}</strong> (${data.trades.length}x, ${winRate}% WR, avg €${avgPnL})</span>
+        <span class="${data.pnl>=0?'pnl-positive':'pnl-negative'}">€${data.pnl.toFixed(2)}</span>
+      </div>
+      <div class="breakdown-bar"><div class="breakdown-fill" style="width:${width}%; background:${data.pnl>=0?'linear-gradient(90deg,#10b981,#34d399)':'linear-gradient(90deg,#ef4444,#f87171)'};"></div></div>
+    </div>`;
+  });
+  html += '</div></div>';
+  return html;
+}
+
+function renderBreakdown(field, trades) {
+  const data_set = trades || state.trades;
+  const groups = {};
+  data_set.forEach(t => {
     const key = t[field] || 'onbekend';
     if (!groups[key]) groups[key] = { trades: [], pnl: 0, wins: 0 };
     groups[key].trades.push(t);
@@ -1883,22 +2192,21 @@ function renderBreakdown(field) {
   return html;
 }
 
-function renderChecklistCorrelation() {
+function renderChecklistCorrelation(trades) {
+  const data_set = trades || state.trades;
   const buckets = {
-    'Score 40+': { trades: [], pnl: 0 },
-    'Score 38-39': { trades: [], pnl: 0 },
-    'Score 30-37': { trades: [], pnl: 0 },
-    'Score <30': { trades: [], pnl: 0 },
+    'Score 40+ (volledig live)': { trades: [], pnl: 0 },
+    'Score 30-39 (halve risk)': { trades: [], pnl: 0 },
+    'Score <30 (geen trade)': { trades: [], pnl: 0 },
     'Geen score': { trades: [], pnl: 0 }
   };
   
-  state.trades.forEach(t => {
+  data_set.forEach(t => {
     let bucket;
     if (t.checklistScore === null || t.checklistScore === undefined) bucket = 'Geen score';
-    else if (t.checklistScore >= 40) bucket = 'Score 40+';
-    else if (t.checklistScore >= 38) bucket = 'Score 38-39';
-    else if (t.checklistScore >= 30) bucket = 'Score 30-37';
-    else bucket = 'Score <30';
+    else if (t.checklistScore >= 40) bucket = 'Score 40+ (volledig live)';
+    else if (t.checklistScore >= 30) bucket = 'Score 30-39 (halve risk)';
+    else bucket = 'Score <30 (geen trade)';
     
     buckets[bucket].trades.push(t);
     buckets[bucket].pnl += t.pnl;
@@ -1919,22 +2227,22 @@ function renderChecklistCorrelation() {
   return html;
 }
 
-function renderEmotionCorrelations() {
-  // Calculate correlation between each emotion and pnl
+function renderEmotionCorrelations(trades) {
+  const data_set = trades || state.trades;
   const emotions = ['stress', 'confidence', 'fomo', 'frustration', 'satisfaction'];
   const emotionLabels = {
-    stress: 'Stress (voor)',
-    confidence: 'Vertrouwen (voor)',
-    fomo: 'FOMO (voor)',
-    frustration: 'Frustratie (na)',
-    satisfaction: 'Tevredenheid (na)'
+    stress: 'Stress vooraf',
+    confidence: 'Vertrouwen vooraf',
+    fomo: 'FOMO vooraf',
+    frustration: 'Frustratie na',
+    satisfaction: 'Tevredenheid na'
   };
   
   let html = '<div class="card" style="background:#0f172a;"><div style="font-size:13px; color:#94a3b8; margin-bottom:12px;">Avg P&L per emotie-niveau (1-3 = laag, 4-7 = midden, 8-10 = hoog)</div>';
   
   emotions.forEach(em => {
     const buckets = { laag: { pnl: 0, count: 0 }, midden: { pnl: 0, count: 0 }, hoog: { pnl: 0, count: 0 } };
-    state.trades.forEach(t => {
+    data_set.forEach(t => {
       if (!t.emotions || t.emotions[em] === undefined) return;
       const v = t.emotions[em];
       const b = v <= 3 ? 'laag' : v <= 7 ? 'midden' : 'hoog';
@@ -1955,12 +2263,13 @@ function renderEmotionCorrelations() {
   return html;
 }
 
-function renderPatterns() {
+function renderPatterns(trades) {
+  const data_set = trades || data_set;
   const patterns = [];
   
   // Pre-trade check correlation
-  const ptFullTrades = state.trades.filter(t => t.preTradeCheck && t.preTradeCheck._totalChecked === t.preTradeCheck._totalChecks);
-  const ptPartialTrades = state.trades.filter(t => t.preTradeCheck && t.preTradeCheck._totalChecked > 0 && t.preTradeCheck._totalChecked < t.preTradeCheck._totalChecks);
+  const ptFullTrades = data_set.filter(t => t.preTradeCheck && t.preTradeCheck._totalChecked === t.preTradeCheck._totalChecks);
+  const ptPartialTrades = data_set.filter(t => t.preTradeCheck && t.preTradeCheck._totalChecked > 0 && t.preTradeCheck._totalChecked < t.preTradeCheck._totalChecks);
   if (ptFullTrades.length >= 3 && ptPartialTrades.length >= 3) {
     const fullAvg = ptFullTrades.reduce((s,t)=>s+t.pnl,0)/ptFullTrades.length;
     const partAvg = ptPartialTrades.reduce((s,t)=>s+t.pnl,0)/ptPartialTrades.length;
@@ -1968,7 +2277,7 @@ function renderPatterns() {
   }
   
   // Pre-trade critical missing
-  const ptMissedCritical = state.trades.filter(t => t.preTradeCheck && t.preTradeCheck._criticalCount < t.preTradeCheck._criticalTotal);
+  const ptMissedCritical = data_set.filter(t => t.preTradeCheck && t.preTradeCheck._criticalCount < t.preTradeCheck._criticalTotal);
   if (ptMissedCritical.length >= 3) {
     const avg = ptMissedCritical.reduce((s,t)=>s+t.pnl,0)/ptMissedCritical.length;
     if (avg < 0) {
@@ -1978,7 +2287,7 @@ function renderPatterns() {
   
   // Pattern 1: Best instrument
   const byInstrument = {};
-  state.trades.forEach(t => {
+  data_set.forEach(t => {
     if (!byInstrument[t.instrument]) byInstrument[t.instrument] = { pnl: 0, count: 0 };
     byInstrument[t.instrument].pnl += t.pnl;
     byInstrument[t.instrument].count++;
@@ -1993,8 +2302,8 @@ function renderPatterns() {
   }
   
   // Pattern 2: Plan adherence impact
-  const planTrades = state.trades.filter(t => t.planFollowed === 'ja');
-  const noPlanTrades = state.trades.filter(t => t.planFollowed === 'nee');
+  const planTrades = data_set.filter(t => t.planFollowed === 'ja');
+  const noPlanTrades = data_set.filter(t => t.planFollowed === 'nee');
   if (planTrades.length >= 3 && noPlanTrades.length >= 3) {
     const planAvg = planTrades.reduce((s,t)=>s+t.pnl,0)/planTrades.length;
     const noPlanAvg = noPlanTrades.reduce((s,t)=>s+t.pnl,0)/noPlanTrades.length;
@@ -2002,7 +2311,7 @@ function renderPatterns() {
   }
   
   // Pattern 3: High FOMO trades
-  const highFomo = state.trades.filter(t => t.emotions && t.emotions.fomo >= 7);
+  const highFomo = data_set.filter(t => t.emotions && t.emotions.fomo >= 7);
   if (highFomo.length >= 3) {
     const avgFomo = highFomo.reduce((s,t)=>s+t.pnl,0)/highFomo.length;
     if (avgFomo < 0) {
@@ -2011,8 +2320,8 @@ function renderPatterns() {
   }
   
   // Pattern 4: Low checklist score impact
-  const lowScoreTrades = state.trades.filter(t => t.checklistScore && t.checklistScore < 38);
-  const highScoreTrades = state.trades.filter(t => t.checklistScore && t.checklistScore >= 40);
+  const lowScoreTrades = data_set.filter(t => t.checklistScore && t.checklistScore < 38);
+  const highScoreTrades = data_set.filter(t => t.checklistScore && t.checklistScore >= 40);
   if (lowScoreTrades.length >= 3 && highScoreTrades.length >= 3) {
     const lowAvg = lowScoreTrades.reduce((s,t)=>s+t.pnl,0)/lowScoreTrades.length;
     const highAvg = highScoreTrades.reduce((s,t)=>s+t.pnl,0)/highScoreTrades.length;
@@ -2021,7 +2330,7 @@ function renderPatterns() {
   
   // Pattern 5: Best time block
   const byTime = {};
-  state.trades.forEach(t => {
+  data_set.forEach(t => {
     if (!byTime[t.timeBlock]) byTime[t.timeBlock] = { pnl: 0, count: 0 };
     byTime[t.timeBlock].pnl += t.pnl;
     byTime[t.timeBlock].count++;
@@ -2032,8 +2341,8 @@ function renderPatterns() {
   }
   
   // Pattern 6: Direction bias
-  const longs = state.trades.filter(t => t.direction === 'long');
-  const shorts = state.trades.filter(t => t.direction === 'short');
+  const longs = data_set.filter(t => t.direction === 'long');
+  const shorts = data_set.filter(t => t.direction === 'short');
   if (longs.length >= 5 && shorts.length >= 5) {
     const longAvg = longs.reduce((s,t)=>s+t.pnl,0)/longs.length;
     const shortAvg = shorts.reduce((s,t)=>s+t.pnl,0)/shorts.length;
@@ -2061,7 +2370,7 @@ async function saveSettings() {
   state.settings.riskPerTrade = parseFloat(document.getElementById('settingRiskPerTrade').value);
   
   try {
-    await cloudStorage.upsert('settings', { user_id: currentUser.id, data: state.settings });
+    await cloudStorage.upsert('settings', { user_id: currentUser.id, data: state.settings }, 'user_id');
     showToast('Instellingen opgeslagen');
   } catch (err) {
     showToast('Fout: ' + err.message, true);
@@ -2072,6 +2381,7 @@ function loadSettings() {
   document.getElementById('settingMaxTrades').value = state.settings.maxTrades;
   document.getElementById('settingDailyLoss').value = state.settings.dailyLoss;
   document.getElementById('settingRiskPerTrade').value = state.settings.riskPerTrade;
+  renderInstrumentOptions();
 }
 
 // ==================== EXPORT / RESET ====================
@@ -2094,8 +2404,11 @@ function exportData() {
 }
 
 async function resetAllData() {
-  if (!confirm('Zeker weten? Alle data wordt verwijderd. Dit kan niet ongedaan worden gemaakt.')) return;
+  if (!confirm('Zeker weten? Alle trades, checklists en reviews worden verwijderd. Je INSTELLINGEN (max trades, daily loss, risk per trade) blijven bewaard. Dit kan niet ongedaan worden gemaakt.')) return;
   if (!confirm('Echt zeker? Maak eerst een export!')) return;
+  
+  // Keep current settings
+  const preservedSettings = { ...state.settings };
   
   try {
     // Delete all trades
@@ -2110,22 +2423,23 @@ async function resetAllData() {
     for (const r of state.dayReviews) {
       try { await cloudStorage.delete('reviews', 'date', r.date); } catch(e) {}
     }
-    try { await cloudStorage.delete('settings', 'user_id', currentUser.id); } catch(e) {}
+    // NOTE: settings are NOT deleted - they are preserved
     
     state = {
       todayChecklist: null,
       trades: [],
       checklistHistory: [],
       dayReviews: [],
-      settings: { maxTrades: 3, dailyLoss: 500, riskPerTrade: 1 }
+      settings: preservedSettings
     };
     
-    showToast('Alle data gereset');
+    showToast('Trades, checklists en reviews gereset. Instellingen behouden.');
     renderChecklist();
     renderTodayTrades();
     renderHistory();
     renderInsights();
     loadSettings();
+    renderInstrumentOptions();
   } catch (err) {
     showToast('Fout bij reset: ' + err.message, true);
   }
