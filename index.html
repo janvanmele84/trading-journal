@@ -1071,14 +1071,14 @@ const PRE_TRADE_CHECKS = [
 ];
 
 // ==================== SUPABASE STORAGE ====================
-let supabase = null;
+let sb = null;
 let currentUser = null;
 
 function initSupabase() {
   const url = localStorage.getItem('sb_url');
   const key = localStorage.getItem('sb_key');
   if (url && key && window.supabase) {
-    supabase = window.supabase.createClient(url, key);
+    sb = window.supabase.createClient(url, key);
     return true;
   }
   return false;
@@ -1105,11 +1105,11 @@ async function setupSupabase(mode) {
   try {
     localStorage.setItem('sb_url', url);
     localStorage.setItem('sb_key', key);
-    supabase = window.supabase.createClient(url, key);
+    sb = window.supabase.createClient(url, key);
     
     let result;
     if (mode === 'signup') {
-      result = await supabase.auth.signUp({ email, password });
+      result = await sb.auth.signUp({ email, password });
       if (result.error) throw result.error;
       if (result.data.user && !result.data.session) {
         errEl.style.color = '#10b981';
@@ -1117,7 +1117,7 @@ async function setupSupabase(mode) {
         return;
       }
     } else {
-      result = await supabase.auth.signInWithPassword({ email, password });
+      result = await sb.auth.signInWithPassword({ email, password });
       if (result.error) throw result.error;
     }
     
@@ -1142,7 +1142,7 @@ async function checkAuth() {
     return false;
   }
   
-  const { data: { session } } = await supabase.auth.getSession();
+  const { data: { session } } = await sb.auth.getSession();
   if (!session) {
     document.getElementById('setupModal').style.display = 'block';
     return false;
@@ -1154,7 +1154,7 @@ async function checkAuth() {
 }
 
 async function logout() {
-  if (supabase) await supabase.auth.signOut();
+  if (sb) await sb.auth.signOut();
   localStorage.removeItem('sb_url');
   localStorage.removeItem('sb_key');
   location.reload();
@@ -1163,28 +1163,28 @@ async function logout() {
 // Storage wrapper using Supabase
 const cloudStorage = {
   async getAll(table) {
-    if (!supabase || !currentUser) return [];
-    const { data, error } = await supabase.from(table).select('*').eq('user_id', currentUser.id);
+    if (!sb || !currentUser) return [];
+    const { data, error } = await sb.from(table).select('*').eq('user_id', currentUser.id);
     if (error) { console.error(error); return []; }
     return data || [];
   },
   async getOne(table, idField, idValue) {
-    if (!supabase || !currentUser) return null;
-    const { data, error } = await supabase.from(table)
+    if (!sb || !currentUser) return null;
+    const { data, error } = await sb.from(table)
       .select('*').eq('user_id', currentUser.id).eq(idField, idValue).maybeSingle();
     if (error) { console.error(error); return null; }
     return data;
   },
   async upsert(table, record) {
-    if (!supabase || !currentUser) return null;
+    if (!sb || !currentUser) return null;
     record.user_id = currentUser.id;
-    const { data, error } = await supabase.from(table).upsert(record).select();
+    const { data, error } = await sb.from(table).upsert(record).select();
     if (error) throw error;
     return data;
   },
   async delete(table, idField, idValue) {
-    if (!supabase || !currentUser) return;
-    await supabase.from(table).delete().eq('user_id', currentUser.id).eq(idField, idValue);
+    if (!sb || !currentUser) return;
+    await sb.from(table).delete().eq('user_id', currentUser.id).eq(idField, idValue);
   }
 };
 
@@ -1201,7 +1201,7 @@ const today = () => new Date().toISOString().split('T')[0];
 
 // ==================== STORAGE FUNCTIONS ====================
 async function loadAllData() {
-  if (!supabase || !currentUser) return;
+  if (!sb || !currentUser) return;
   
   state.trades = [];
   state.checklistHistory = [];
@@ -2171,13 +2171,31 @@ async function init() {
   showDate();
   setupNavigation();
   
-  const authenticated = await checkAuth();
-  if (!authenticated) return; // Modal is showing, will continue after login
+  // Wait for Supabase library to be available (max 5 seconds)
+  let waited = 0;
+  while (!window.supabase && waited < 5000) {
+    await new Promise(r => setTimeout(r, 100));
+    waited += 100;
+  }
   
-  await loadAllData();
+  if (!window.supabase) {
+    document.getElementById('loadingChecklist').textContent = 
+      'Fout: Supabase library kon niet laden. Check je internet en ververs de pagina.';
+    return;
+  }
   
+  // Always hide loading and show content area (even if not authenticated yet)
   document.getElementById('loadingChecklist').style.display = 'none';
   document.getElementById('checklistContent').style.display = 'block';
+  
+  const authenticated = await checkAuth();
+  if (!authenticated) {
+    // Modal is showing - render empty state
+    renderChecklist();
+    return;
+  }
+  
+  await loadAllData();
   
   renderChecklist();
   renderTodayTrades();
@@ -2186,7 +2204,7 @@ async function init() {
   updateTradeWarning();
 }
 
-// Wait for Supabase library to load before init
+// Wait for both DOM and Supabase library to load before init
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', init);
 } else {
