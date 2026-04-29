@@ -1,0 +1,2197 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Trading Journal & Performance Tracker</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: #0f172a;
+    color: #e2e8f0;
+    min-height: 100vh;
+    padding: 20px;
+  }
+  .container { max-width: 1400px; margin: 0 auto; }
+  header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 24px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid #1e293b;
+  }
+  h1 { font-size: 24px; font-weight: 600; }
+  .date-display { color: #94a3b8; font-size: 14px; }
+  
+  nav {
+    display: flex;
+    gap: 4px;
+    margin-bottom: 24px;
+    background: #1e293b;
+    padding: 4px;
+    border-radius: 8px;
+    overflow-x: auto;
+  }
+  nav button {
+    flex: 1;
+    min-width: 120px;
+    padding: 10px 16px;
+    background: transparent;
+    color: #94a3b8;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+    white-space: nowrap;
+    transition: all 0.2s;
+  }
+  nav button:hover { color: #e2e8f0; }
+  nav button.active { background: #334155; color: #fff; }
+  
+  .panel { display: none; }
+  .panel.active { display: block; }
+  
+  .card {
+    background: #1e293b;
+    border-radius: 12px;
+    padding: 24px;
+    margin-bottom: 16px;
+  }
+  .card h2 {
+    font-size: 18px;
+    margin-bottom: 16px;
+    color: #f1f5f9;
+  }
+  .card h3 {
+    font-size: 15px;
+    margin-bottom: 12px;
+    color: #cbd5e1;
+    margin-top: 16px;
+  }
+  
+  /* Checklist */
+  .checklist-group {
+    margin-bottom: 20px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid #334155;
+  }
+  .checklist-group:last-child { border-bottom: none; }
+  .group-header {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 12px;
+  }
+  .group-title {
+    font-weight: 600;
+    color: #f1f5f9;
+  }
+  .group-weight {
+    font-size: 12px;
+    color: #94a3b8;
+  }
+  .check-item {
+    display: flex;
+    align-items: center;
+    padding: 10px;
+    margin-bottom: 6px;
+    background: #0f172a;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  .check-item:hover { background: #1a2842; }
+  .check-item input[type="checkbox"] {
+    margin-right: 12px;
+    width: 18px;
+    height: 18px;
+    cursor: pointer;
+    accent-color: #3b82f6;
+  }
+  .check-item.critical { border-left: 3px solid #ef4444; }
+  .check-item.medium { border-left: 3px solid #f59e0b; }
+  .check-item.light { border-left: 3px solid #64748b; }
+  .check-item label { flex: 1; cursor: pointer; font-size: 14px; }
+  .check-points { font-size: 12px; color: #64748b; margin-left: 8px; }
+  
+  /* Score display */
+  .score-display {
+    text-align: center;
+    padding: 24px;
+    border-radius: 12px;
+    margin-bottom: 16px;
+  }
+  .score-display.go { background: linear-gradient(135deg, #065f46, #047857); }
+  .score-display.caution { background: linear-gradient(135deg, #92400e, #b45309); }
+  .score-display.nogo { background: linear-gradient(135deg, #991b1b, #b91c1c); }
+  .score-number {
+    font-size: 48px;
+    font-weight: 700;
+    margin-bottom: 8px;
+  }
+  .score-label {
+    font-size: 16px;
+    font-weight: 600;
+    margin-bottom: 8px;
+  }
+  .score-advice {
+    font-size: 13px;
+    opacity: 0.9;
+  }
+  
+  /* Forms */
+  .form-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 12px;
+    margin-bottom: 16px;
+  }
+  .form-group {
+    display: flex;
+    flex-direction: column;
+  }
+  .form-group label {
+    font-size: 12px;
+    color: #94a3b8;
+    margin-bottom: 6px;
+    font-weight: 500;
+  }
+  input, select, textarea {
+    background: #0f172a;
+    border: 1px solid #334155;
+    color: #e2e8f0;
+    padding: 10px 12px;
+    border-radius: 6px;
+    font-size: 14px;
+    font-family: inherit;
+  }
+  input:focus, select:focus, textarea:focus {
+    outline: none;
+    border-color: #3b82f6;
+  }
+  textarea { resize: vertical; min-height: 80px; }
+  
+  button.primary {
+    background: #3b82f6;
+    color: white;
+    border: none;
+    padding: 12px 24px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 600;
+    transition: background 0.15s;
+  }
+  button.primary:hover { background: #2563eb; }
+  button.primary:disabled { background: #475569; cursor: not-allowed; }
+  
+  button.secondary {
+    background: #334155;
+    color: white;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 13px;
+    transition: background 0.15s;
+  }
+  button.secondary:hover { background: #475569; }
+  
+  button.danger {
+    background: #991b1b;
+    color: white;
+    border: none;
+    padding: 6px 12px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 12px;
+  }
+  
+  /* Tables */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+  }
+  th {
+    text-align: left;
+    padding: 10px;
+    background: #0f172a;
+    color: #94a3b8;
+    font-weight: 500;
+    border-bottom: 1px solid #334155;
+  }
+  td {
+    padding: 10px;
+    border-bottom: 1px solid #1e293b;
+  }
+  tr:hover td { background: #1a2842; }
+  .pnl-positive { color: #10b981; font-weight: 600; }
+  .pnl-negative { color: #ef4444; font-weight: 600; }
+  
+  /* Insights */
+  .insight-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 16px;
+  }
+  .insight-card {
+    background: #0f172a;
+    padding: 20px;
+    border-radius: 8px;
+    border-left: 3px solid #3b82f6;
+  }
+  .insight-card h4 {
+    font-size: 13px;
+    color: #94a3b8;
+    margin-bottom: 8px;
+    font-weight: 500;
+  }
+  .insight-value {
+    font-size: 24px;
+    font-weight: 700;
+    margin-bottom: 4px;
+  }
+  .insight-detail {
+    font-size: 12px;
+    color: #94a3b8;
+  }
+  
+  .breakdown-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 8px 0;
+    border-bottom: 1px solid #1e293b;
+    font-size: 14px;
+  }
+  .breakdown-row:last-child { border-bottom: none; }
+  .breakdown-bar {
+    height: 6px;
+    background: #1e293b;
+    border-radius: 3px;
+    overflow: hidden;
+    margin-top: 4px;
+  }
+  .breakdown-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #3b82f6, #60a5fa);
+    transition: width 0.3s;
+  }
+  
+  .empty-state {
+    text-align: center;
+    padding: 40px;
+    color: #64748b;
+  }
+  
+  .toast {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    background: #047857;
+    color: white;
+    padding: 12px 20px;
+    border-radius: 8px;
+    box-shadow: 0 10px 25px rgba(0,0,0,0.3);
+    opacity: 0;
+    transform: translateY(20px);
+    transition: all 0.3s;
+    z-index: 1000;
+  }
+  .toast.show { opacity: 1; transform: translateY(0); }
+  .toast.error { background: #b91c1c; }
+  
+  .emotion-slider {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 12px;
+  }
+  .emotion-slider label {
+    min-width: 130px;
+    font-size: 13px;
+    color: #cbd5e1;
+  }
+  input[type="range"] {
+    flex: 1;
+    accent-color: #3b82f6;
+  }
+  .slider-value {
+    min-width: 30px;
+    text-align: center;
+    font-weight: 600;
+    color: #60a5fa;
+  }
+  
+  .warning-box {
+    background: #7c2d12;
+    border-left: 4px solid #ef4444;
+    padding: 12px 16px;
+    border-radius: 6px;
+    margin-bottom: 16px;
+    font-size: 14px;
+  }
+  
+  .info-box {
+    background: #1e3a8a;
+    border-left: 4px solid #3b82f6;
+    padding: 12px 16px;
+    border-radius: 6px;
+    margin-bottom: 16px;
+    font-size: 13px;
+    color: #dbeafe;
+  }
+  
+  .stats-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 12px;
+    margin-bottom: 16px;
+  }
+  .stat-box {
+    background: #0f172a;
+    padding: 16px;
+    border-radius: 8px;
+    text-align: center;
+  }
+  .stat-label {
+    font-size: 11px;
+    color: #94a3b8;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 4px;
+  }
+  .stat-value {
+    font-size: 22px;
+    font-weight: 700;
+  }
+  
+  .loading {
+    text-align: center;
+    padding: 40px;
+    color: #94a3b8;
+  }
+  
+  @media (max-width: 768px) {
+    body { padding: 12px; }
+    .form-grid { grid-template-columns: 1fr; }
+    nav { flex-wrap: wrap; }
+    nav button { min-width: auto; flex: 1 1 45%; }
+  }
+</style>
+</head>
+<body>
+<!-- SUPABASE SETUP MODAL -->
+<div id="setupModal" style="display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.85); z-index:2000; padding:20px; overflow-y:auto;">
+  <div style="max-width:600px; margin:40px auto; background:#1e293b; padding:32px; border-radius:12px;">
+    <h2 style="margin-bottom:16px;">🔧 Eerste keer setup</h2>
+    <p style="color:#cbd5e1; margin-bottom:16px; font-size:14px; line-height:1.5;">
+      Voor je begint moet je je Supabase-gegevens invullen. Je vindt deze in je Supabase-project onder Settings → API.
+      <br><br>
+      <strong>Belangrijk:</strong> deze worden lokaal in je browser bewaard. Op elke nieuwe computer waar je deze tool opent moet je ze opnieuw invullen.
+    </p>
+    <div class="form-group" style="margin-bottom:12px;">
+      <label>Supabase Project URL</label>
+      <input type="text" id="setupUrl" placeholder="https://xxxxx.supabase.co">
+    </div>
+    <div class="form-group" style="margin-bottom:12px;">
+      <label>Supabase Anon Key (publieke key)</label>
+      <input type="text" id="setupKey" placeholder="eyJhbGc...">
+    </div>
+    <div class="form-group" style="margin-bottom:16px;">
+      <label>Je email (voor login)</label>
+      <input type="email" id="setupEmail" placeholder="jij@email.com">
+    </div>
+    <div class="form-group" style="margin-bottom:16px;">
+      <label>Wachtwoord</label>
+      <input type="password" id="setupPassword" placeholder="Minimaal 6 tekens">
+    </div>
+    <div style="display:flex; gap:8px; margin-bottom:8px;">
+      <button class="primary" onclick="setupSupabase('signup')" style="flex:1;">Account aanmaken</button>
+      <button class="primary" onclick="setupSupabase('login')" style="flex:1; background:#10b981;">Inloggen</button>
+    </div>
+    <div id="setupError" style="color:#ef4444; font-size:13px; margin-top:8px;"></div>
+    <p style="color:#94a3b8; font-size:12px; margin-top:16px;">
+      Eerste keer? Klik "Account aanmaken". Daarna gebruik je "Inloggen".
+    </p>
+  </div>
+</div>
+
+<div class="container">
+  <header>
+    <div>
+      <h1>Trading Journal</h1>
+      <div class="date-display" id="dateDisplay"></div>
+    </div>
+    <div style="display:flex; gap:8px; align-items:center;">
+      <span id="userEmail" style="color:#94a3b8; font-size:13px;"></span>
+      <button class="secondary" onclick="exportData()">Export</button>
+      <button class="secondary" onclick="logout()">Uitloggen</button>
+    </div>
+  </header>
+  
+  <nav>
+    <button class="active" data-panel="checklist">Pre-Market Checklist</button>
+    <button data-panel="pretrade">Pre-Trade Check</button>
+    <button data-panel="trades">Trade Logging</button>
+    <button data-panel="dayreview">Dag Review</button>
+    <button data-panel="history">Geschiedenis</button>
+    <button data-panel="insights">Inzichten</button>
+    <button data-panel="settings">Instellingen</button>
+  </nav>
+
+  <!-- CHECKLIST PANEL -->
+  <div class="panel active" id="panel-checklist">
+    <div id="loadingChecklist" class="loading">Laden...</div>
+    <div id="checklistContent" style="display:none;">
+      <div class="card">
+        <h2>Pre-Market Checklist</h2>
+        <div class="info-box">
+          Vul dit elke ochtend in voor je markt opent. Onder 30 punten of een gefaalde kritieke factor = geen live trading vandaag.
+        </div>
+        <div id="checklistItems"></div>
+      </div>
+      
+      <div class="card" id="scoreCard">
+        <div id="scoreDisplay" class="score-display">
+          <div class="score-number" id="scoreNumber">0</div>
+          <div class="score-label" id="scoreLabel">Vink items aan</div>
+          <div class="score-advice" id="scoreAdvice">Maximumscore: 45 punten</div>
+        </div>
+        <button class="primary" id="saveChecklistBtn" style="width:100%;" onclick="saveChecklist()">Checklist opslaan voor vandaag</button>
+        <div id="todayChecklistInfo" style="margin-top:12px; font-size:13px; color:#94a3b8; text-align:center;"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- PRE-TRADE CHECK PANEL -->
+  <div class="panel" id="panel-pretrade">
+    <div class="card">
+      <h2>Pre-Trade Check</h2>
+      <div class="info-box">
+        Doorloop deze check <strong>vóór</strong> je een trade plaatst. Allemaal groen? Trade. Eén of meer rood? Skip de trade.
+      </div>
+      
+      <div style="display:flex; gap:8px; margin-bottom:20px; flex-wrap:wrap;">
+        <button class="secondary" onclick="window.open('https://tradingeconomics.com/calendar?importance=3&countries=germany,united-kingdom,united-states', '_blank')">📅 Open Economic Calendar</button>
+        <button class="secondary" onclick="window.open('https://www.forexfactory.com/calendar', '_blank')">📅 ForexFactory Calendar</button>
+        <button class="secondary" onclick="resetPreTradeCheck()">🔄 Reset checks</button>
+      </div>
+      
+      <div id="preTradeChecksContainer"></div>
+      
+      <div id="preTradeScoreInfo" style="margin-top:16px; padding:16px; border-radius:8px; font-size:14px; font-weight:600;"></div>
+      
+      <div class="info-box" style="margin-top:16px;">
+        💡 Deze checks worden automatisch aan je volgende trade gekoppeld. Zo kan je later zien of trades met alle ✓ beter presteren.
+      </div>
+    </div>
+  </div>
+
+  <!-- TRADES PANEL -->
+  <div class="panel" id="panel-trades">
+    <div class="card">
+      <h2>Nieuwe Trade Loggen</h2>
+      <div id="tradeWarning"></div>
+      
+      <h3>Trade Details</h3>
+      <div class="form-grid">
+        <div class="form-group">
+          <label>Instrument</label>
+          <select id="tradeInstrument">
+            <option value="DAX">DAX</option>
+            <option value="US100">US100</option>
+            <option value="US30">US30</option>
+            <option value="XAU">XAU (Goud)</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Richting</label>
+          <select id="tradeDirection">
+            <option value="long">Long</option>
+            <option value="short">Short</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Sessie</label>
+          <select id="tradeSession">
+            <option value="voormiddag">Voormiddag (9-11u)</option>
+            <option value="namiddag">Namiddag (15:30-17:30u)</option>
+            <option value="ander">Ander</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Tijdsblok</label>
+          <select id="tradeTimeBlock">
+            <option value="9-10">9:00-10:00</option>
+            <option value="10-11">10:00-11:00</option>
+            <option value="15:30-16:30">15:30-16:30</option>
+            <option value="16:30-17:30">16:30-17:30</option>
+            <option value="ander">Ander</option>
+          </select>
+        </div>
+      </div>
+      
+      <div class="form-grid">
+        <div class="form-group">
+          <label>Entry prijs</label>
+          <input type="number" id="tradeEntry" step="0.01" placeholder="0.00">
+        </div>
+        <div class="form-group">
+          <label>Exit prijs</label>
+          <input type="number" id="tradeExit" step="0.01" placeholder="0.00">
+        </div>
+        <div class="form-group">
+          <label>Stop loss</label>
+          <input type="number" id="tradeStop" step="0.01" placeholder="0.00">
+        </div>
+        <div class="form-group">
+          <label>Target</label>
+          <input type="number" id="tradeTarget" step="0.01" placeholder="0.00">
+        </div>
+      </div>
+      
+      <div class="form-grid">
+        <div class="form-group">
+          <label>P&L (€)</label>
+          <input type="number" id="tradePnL" step="0.01" placeholder="0.00">
+        </div>
+        <div class="form-group">
+          <label>Aantal contracten/lots</label>
+          <input type="number" id="tradeSize" step="0.01" placeholder="1">
+        </div>
+        <div class="form-group">
+          <label>Setup type</label>
+          <select id="tradeSetup" onchange="renderStrategyChecklist()">
+            <option value="">-- Kies setup --</option>
+            <option value="hod-lod-breakout">HOD/LOD Breakout (Steve)</option>
+            <option value="reversal">Reversal (Steve)</option>
+            <option value="break-retest">Break & Retest (Steve)</option>
+            <option value="xau-morning-star">XAU Morning Star (David)</option>
+            <option value="ict-fvg">ICT / FVG / Liquidity (eigen)</option>
+            <option value="ander">Ander</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Plan gevolgd?</label>
+          <select id="tradePlanFollowed">
+            <option value="ja">Ja, volledig</option>
+            <option value="gedeeltelijk">Gedeeltelijk</option>
+            <option value="nee">Nee, geïmproviseerd</option>
+          </select>
+        </div>
+      </div>
+      
+      <h3>Emoties</h3>
+      <div class="emotion-slider">
+        <label>Stress (voor):</label>
+        <input type="range" id="emotionStress" min="1" max="10" value="5" oninput="document.getElementById('emotionStressVal').textContent=this.value">
+        <span class="slider-value" id="emotionStressVal">5</span>
+      </div>
+      <div class="emotion-slider">
+        <label>Vertrouwen (voor):</label>
+        <input type="range" id="emotionConfidence" min="1" max="10" value="5" oninput="document.getElementById('emotionConfidenceVal').textContent=this.value">
+        <span class="slider-value" id="emotionConfidenceVal">5</span>
+      </div>
+      <div class="emotion-slider">
+        <label>FOMO (voor):</label>
+        <input type="range" id="emotionFomo" min="1" max="10" value="3" oninput="document.getElementById('emotionFomoVal').textContent=this.value">
+        <span class="slider-value" id="emotionFomoVal">3</span>
+      </div>
+      <div class="emotion-slider">
+        <label>Frustratie (na):</label>
+        <input type="range" id="emotionFrustration" min="1" max="10" value="3" oninput="document.getElementById('emotionFrustrationVal').textContent=this.value">
+        <span class="slider-value" id="emotionFrustrationVal">3</span>
+      </div>
+      <div class="emotion-slider">
+        <label>Tevredenheid (na):</label>
+        <input type="range" id="emotionSatisfaction" min="1" max="10" value="5" oninput="document.getElementById('emotionSatisfactionVal').textContent=this.value">
+        <span class="slider-value" id="emotionSatisfactionVal">5</span>
+      </div>
+      
+      <div id="strategyChecklistContainer"></div>
+      
+      <h3>Notities</h3>
+      <div class="form-group" style="margin-bottom:12px;">
+        <label>Waarom deze trade? Wat zag je?</label>
+        <textarea id="tradeReason" placeholder="Beschrijf wat je zag, waarom je instapte..."></textarea>
+      </div>
+      <div class="form-group" style="margin-bottom:16px;">
+        <label>Lessen / observaties</label>
+        <textarea id="tradeLessons" placeholder="Wat ging goed? Wat zou je anders doen?"></textarea>
+      </div>
+      
+      <button class="primary" onclick="saveTrade()">Trade opslaan</button>
+    </div>
+    
+    <div class="card">
+      <h2>Trades Vandaag</h2>
+      <div id="todayTrades"></div>
+    </div>
+  </div>
+
+  <!-- DAY REVIEW PANEL -->
+  <div class="panel" id="panel-dayreview">
+    <div class="card">
+      <h2>Dag Afsluiting</h2>
+      <div class="info-box">Vul dit aan het einde van je trading dag in, terwijl alles nog vers is.</div>
+      
+      <div id="dayStats" class="stats-row"></div>
+      
+      <h3>Reflectie</h3>
+      <div class="form-group" style="margin-bottom:12px;">
+        <label>Heb je je trading plan gevolgd? (1-10)</label>
+        <input type="range" id="reviewPlanAdherence" min="1" max="10" value="7" oninput="document.getElementById('reviewPlanAdherenceVal').textContent=this.value">
+        <div style="text-align:center; font-weight:600; color:#60a5fa;" id="reviewPlanAdherenceVal">7</div>
+      </div>
+      <div class="form-group" style="margin-bottom:12px;">
+        <label>Discipline score (1-10)</label>
+        <input type="range" id="reviewDiscipline" min="1" max="10" value="7" oninput="document.getElementById('reviewDisciplineVal').textContent=this.value">
+        <div style="text-align:center; font-weight:600; color:#60a5fa;" id="reviewDisciplineVal">7</div>
+      </div>
+      <div class="form-group" style="margin-bottom:12px;">
+        <label>Heb je regels gebroken? Welke?</label>
+        <textarea id="reviewBrokenRules" placeholder="Bv. revenge trade na verlies, meer dan dagelijkse limiet, ..."></textarea>
+      </div>
+      <div class="form-group" style="margin-bottom:12px;">
+        <label>Wat ging goed vandaag?</label>
+        <textarea id="reviewGood" placeholder="..."></textarea>
+      </div>
+      <div class="form-group" style="margin-bottom:12px;">
+        <label>Wat moet beter morgen?</label>
+        <textarea id="reviewImprove" placeholder="..."></textarea>
+      </div>
+      <div class="form-group" style="margin-bottom:16px;">
+        <label>Belangrijkste les van vandaag</label>
+        <textarea id="reviewLesson" placeholder="Eén concrete les..."></textarea>
+      </div>
+      
+      <button class="primary" onclick="saveDayReview()">Dag afsluiten</button>
+    </div>
+  </div>
+
+  <!-- HISTORY PANEL -->
+  <div class="panel" id="panel-history">
+    <div class="card">
+      <h2>Trade Geschiedenis</h2>
+      <div id="allTrades"></div>
+    </div>
+    <div class="card">
+      <h2>Checklist Geschiedenis</h2>
+      <div id="checklistHistory"></div>
+    </div>
+  </div>
+
+  <!-- INSIGHTS PANEL -->
+  <div class="panel" id="panel-insights">
+    <div class="card">
+      <h2>Performance Inzichten</h2>
+      <div id="insightsContent">
+        <div class="empty-state">Log eerst een paar trades om inzichten te zien.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SETTINGS PANEL -->
+  <div class="panel" id="panel-settings">
+    <div class="card">
+      <h2>Instellingen</h2>
+      <div class="form-group" style="margin-bottom:16px;">
+        <label>Maximum trades per dag</label>
+        <input type="number" id="settingMaxTrades" value="3" min="1" max="20">
+      </div>
+      <div class="form-group" style="margin-bottom:16px;">
+        <label>Daily loss limit (€)</label>
+        <input type="number" id="settingDailyLoss" value="500" min="0">
+      </div>
+      <div class="form-group" style="margin-bottom:16px;">
+        <label>Risico per trade (% van account)</label>
+        <input type="number" id="settingRiskPerTrade" value="1" min="0.1" max="5" step="0.1">
+      </div>
+      <button class="primary" onclick="saveSettings()">Instellingen opslaan</button>
+    </div>
+    <div class="card">
+      <h2>Data Beheer</h2>
+      <p style="color:#94a3b8; font-size:13px; margin-bottom:12px;">Je data wordt veilig opgeslagen. Maak regelmatig een backup via Export.</p>
+      <button class="secondary" onclick="exportData()">Export alle data (JSON)</button>
+      <button class="danger" onclick="resetAllData()" style="margin-left:8px;">Reset alle data</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast" class="toast"></div>
+
+<script>
+// ==================== CHECKLIST DEFINITION ====================
+const CHECKLIST_ITEMS = [
+  // Critical (5 points each, deal-breakers if 0)
+  { id: 'sleep', label: '7+ uur geslapen vannacht', points: 5, group: 'critical', deal_breaker: true },
+  { id: 'alcohol', label: 'Geen alcohol gisteravond (of >12u geleden)', points: 5, group: 'critical', deal_breaker: true },
+  { id: 'mental', label: 'Mentaal stabiel (geen ruzie, acute stress, emotionele dip)', points: 5, group: 'critical', deal_breaker: true },
+  { id: 'alone', label: 'Alleen in het kantoor / niet afgeleid', points: 5, group: 'critical', deal_breaker: true },
+  { id: 'no_revenge', label: 'Geen "ik moet vandaag goedmaken" gevoel', points: 5, group: 'critical', deal_breaker: true },
+  // Medium (3 points each)
+  { id: 'breakfast', label: 'Gezond ontbeten', points: 3, group: 'medium' },
+  { id: 'walk', label: 'Wandeling van 20+ min gemaakt', points: 3, group: 'medium' },
+  { id: 'plan_ready', label: 'Trading plan en levels voor vandaag voorbereid', points: 3, group: 'medium' },
+  { id: 'agenda', label: 'Economische agenda gecheckt', points: 3, group: 'medium' },
+  { id: 'no_news', label: 'Geen grote red-flag news events tijdens sessie', points: 3, group: 'medium' },
+  // Light (1 point each)
+  { id: 'desk', label: 'Bureau opgeruimd', points: 1, group: 'light' },
+  { id: 'phone', label: 'Telefoon op stil/weg', points: 1, group: 'light' },
+  { id: 'water', label: 'Water binnen handbereik', points: 1, group: 'light' },
+  { id: 'no_pressure', label: 'Geen tijdsdruk (geen afspraak komende 3u)', points: 1, group: 'light' },
+  { id: 'prev_journal', label: 'Vorige trading dag goed afgesloten (journal ingevuld)', points: 1, group: 'light' }
+];
+
+const MAX_SCORE = CHECKLIST_ITEMS.reduce((s, i) => s + i.points, 0);
+
+// ==================== STRATEGY CHECKLISTS ====================
+const STRATEGY_CHECKLISTS = {
+  'hod-lod-breakout': {
+    name: 'HOD/LOD Breakout (Steve)',
+    description: 'High of Day / Low of Day breakout strategie. Werkt het best na gaps >2% en sterke trend.',
+    sections: [
+      {
+        title: 'Context & Trend',
+        critical: true,
+        items: [
+          'Daily trend duidelijk bepaald (mee met de trend traden)',
+          'Gap > 2% (tussen close en open, niet wiks)',
+          'Gap richting volgt daily trend',
+          'Indexen (US500) in de rug (tenzij earnings/news)',
+          'Nieuws gecheckt op Yahoo Finance / Benzinga'
+        ]
+      },
+      {
+        title: 'Setup & Levels',
+        critical: true,
+        items: [
+          'Levels getekend op urengrafiek',
+          'Laatste highs/lows op urenchart geïdentificeerd',
+          'Geen levels in de weg (vrije lucht)',
+          'Pullback groot genoeg (minimaal 50% retracement)',
+          'Break en retest geconfirmeerd op 5min TF',
+          'Candle gesloten boven/onder level (niet alleen wik)'
+        ]
+      },
+      {
+        title: 'Volatiliteit & Extensie',
+        critical: false,
+        items: [
+          'ATR tussen 80-120%',
+          'Niet te ver van 9EMA (geen extreme extensie)',
+          'VWAP-extensie gecheckt',
+          'Ruimte naar target (minimum 2R)'
+        ]
+      },
+      {
+        title: 'Entry & Risk',
+        critical: true,
+        items: [
+          'Entry na sluiten van retest-candle (5min TF)',
+          'Stop loss bepaald (in lijn met ATR, 10-20%)',
+          'SL geplaatst op 3min TF',
+          'Risk/Reward minimum 1:2',
+          'Positiegrootte berekend op basis van risico-regel'
+        ]
+      }
+    ]
+  },
+  'reversal': {
+    name: 'Reversal (Steve)',
+    description: 'Reversal in richting van hoofdtrend, op support/resistance levels. Tegen de korte-termijn beweging.',
+    sections: [
+      {
+        title: 'Trend & Context',
+        critical: true,
+        items: [
+          'Reversal is in richting van de hoofdtrend (daily)',
+          'Op een duidelijk support of resistance level',
+          'Voldoende ruimte tot volgend level of VWAP',
+          'Indexen ondersteunen de richting',
+          'Geen aankomend high-impact nieuws'
+        ]
+      },
+      {
+        title: 'Reversal Setup',
+        critical: true,
+        items: [
+          'LH (lagere high) of HL (hogere low) gevormd',
+          'Hammer candle / pin bar op 3 of 5 min TF',
+          'Bij short: prijs mag boven lijn geweest zijn, NIET eronder',
+          'Bij long: prijs mag onder lijn geweest zijn, NIET erboven',
+          'Bevestigingscandle in reversal-richting'
+        ]
+      },
+      {
+        title: 'Volatiliteit',
+        critical: false,
+        items: [
+          'ATR tussen 80-110%',
+          'Niet in extreme extensie van EMA (intraday)',
+          'Geen fake-out signalen op lower TF (5/15min)'
+        ]
+      },
+      {
+        title: 'Entry & Risk',
+        critical: true,
+        items: [
+          'SL in lijn met ATR (10-20%)',
+          'Fibonacci 50% retracement op level (extra confirmatie)',
+          'R/R minimum 1:2',
+          'Positiegrootte correct berekend'
+        ]
+      }
+    ]
+  },
+  'break-retest': {
+    name: 'Break & Retest (Steve)',
+    description: 'Level breekt duidelijk, prijs komt terug om te testen, dan instappen in richting van break.',
+    sections: [
+      {
+        title: 'Context',
+        critical: true,
+        items: [
+          'Daily trend bepaald',
+          'Levels op urenchart getekend',
+          'Indexen in de rug',
+          'Hoofdscherm: 5min, levels van 1u',
+          'Geen high-impact nieuws verwacht in komend uur'
+        ]
+      },
+      {
+        title: 'Break Confirmatie',
+        critical: true,
+        items: [
+          'Level is duidelijk doorbroken (er moet doorheen gegaan zijn)',
+          'Candle gesloten voorbij het level (niet alleen een wik)',
+          'Volume bij de break (versterkt de richting)',
+          'Geen directe terugtrekking naar binnen het range'
+        ]
+      },
+      {
+        title: 'Retest Kwaliteit',
+        critical: true,
+        items: [
+          'Prijs komt terug naar het gebroken level',
+          'Retest raakt level aan, maar valt er niet diep door',
+          'Bevestigingscandle bij retest (rejection / hammer)',
+          'Volume neemt af bij retest (gezond)',
+          'Niet in extreme extensie van 9EMA'
+        ]
+      },
+      {
+        title: 'Entry & Risk',
+        critical: true,
+        items: [
+          'Entry na sluiten van retest-bevestigingscandle (5min)',
+          'SL net voorbij het level (op 3min TF bekeken)',
+          'R/R minimum 1:2',
+          'Target identificeerbaar (volgend level / 9EMA)',
+          'Niet break&retest doen in extreme extensie'
+        ]
+      }
+    ]
+  },
+  'xau-morning-star': {
+    name: 'XAU Morning Star (David)',
+    description: 'Goud-specifieke setup. Hard valende prijs, hammer als bodem, krachtige rebound.',
+    sections: [
+      {
+        title: 'Timing & Context',
+        critical: true,
+        items: [
+          'Tijdsblok 6-11u of 14-22u (beste XAU uren)',
+          'Vanaf 12u: grote bewegingen mogelijk',
+          'Levels intekenen op urenchart',
+          'Economic calendar gecheckt (PMI, werkloosheid, FOMC)',
+          'Niet te ver van 9EMA op daily (geen extensie)'
+        ]
+      },
+      {
+        title: 'Morning Star Patroon',
+        critical: true,
+        items: [
+          'Prijs valt hard (eerste candle door level)',
+          'Bodem-candle is hammer met lange wik onderaan',
+          'Bodem stijgt iets boven het level terug',
+          'Volgende candle breekt HARD omhoog (2 of 3 min TF)',
+          'Als bevestigingscandle niet hard breekt: NIET traden'
+        ]
+      },
+      {
+        title: 'Volume & Confluentie',
+        critical: false,
+        items: [
+          'Volume neemt af bij dalen',
+          'Volume stijgt bij omkeer naar long',
+          'Bounce op VWAP (extra trigger)',
+          'Fibonacci 50% retracement (bonus)',
+          'CHF correlatie ondersteunt richting',
+          '3 belangrijkste: 50% Fib, 9EMA, retest'
+        ]
+      },
+      {
+        title: 'Entry & Risk',
+        critical: true,
+        items: [
+          'Pullback was 10-15 dollar (idealiter)',
+          'Stop loss MAX 15-20 dollar (ruim, maar niet groter)',
+          'Range-context (vaak in range, uitbraak = kans)',
+          'Niet traden bij extreme daily-extensie van 9EMA'
+        ]
+      }
+    ]
+  },
+  'ict-fvg': {
+    name: 'ICT / FVG / Liquidity (eigen)',
+    description: 'NY-open strategie met Asia/London session levels, Fair Value Gaps en liquidity.',
+    sections: [
+      {
+        title: 'Voorbereiding (vanaf 14u)',
+        critical: true,
+        items: [
+          'Week high en low aangeduid',
+          'Open van deze week aangeduid',
+          'Yesterday high & low getekend',
+          'Previous month high & low',
+          'Asia session (12u-6u NL) high & low',
+          'London session (6u-14u NL) high & low'
+        ]
+      },
+      {
+        title: 'Range Analyse',
+        critical: true,
+        items: [
+          'Meetlatje tussen Asia en London high/low',
+          'Asia-levels al geraakt tijdens London? → niet meer interessant',
+          'Liquiditeit-pools geïdentificeerd',
+          'Fair Value Gaps (FVG) op hogere TF gemarkeerd'
+        ]
+      },
+      {
+        title: 'NY Open Setup (vanaf 15:30)',
+        critical: true,
+        items: [
+          'Eerste 15min candle vanaf 15:30 als referentielevels',
+          'FVG op 1min die het level breekt geïdentificeerd',
+          'Plan voor zowel long als short klaar (beide richtingen!)',
+          'Volume weergegeven (versterkt richting)',
+          'Op 5min kijken, instappen op 1min'
+        ]
+      },
+      {
+        title: 'Entry & Risk',
+        critical: true,
+        items: [
+          'Wachten op retest van FVG / break-level',
+          'Niet weg-van-gap traden bij laag volume',
+          'Reversal alleen bij voldoende volume',
+          'Double top/bottom als extra confirmatie',
+          'Trade-window: 14:30 - 17:30 (15:30 = vaak cijfers)',
+          'SL op 3min TF, R/R min 1:2'
+        ]
+      }
+    ]
+  }
+};
+
+// ==================== PRE-TRADE CHECKS ====================
+const PRE_TRADE_CHECKS = [
+  {
+    id: 'no_news',
+    label: 'Geen nieuws / earnings het komende uur',
+    detail: 'Check op tradingeconomics.com (3-sterren, Duitsland/UK/US) of forexfactory.com',
+    critical: true
+  },
+  {
+    id: 'with_trend',
+    label: 'Trade gaat MEE met de daily trend',
+    detail: 'Tegen-trend trades zijn alleen aan te raden bij specifieke reversal-setups op support/resistance',
+    critical: true
+  },
+  {
+    id: 'levels_drawn',
+    label: 'YH, YL, Asia high/low en andere levels aangeduid',
+    detail: 'Yesterday high/low, Asia session high/low, week levels, month levels',
+    critical: true
+  },
+  {
+    id: 'vwap_position',
+    label: 'VWAP-positie gecheckt (boven/onder, op minuten TF)',
+    detail: 'Positie t.o.v. VWAP bevestigt of contradicteert de richting',
+    critical: false
+  },
+  {
+    id: 'ema_position',
+    label: 'EMA positie gecheckt (geen extreme extensie)',
+    detail: 'Vooral op D TF. Bij extensie: geen break&retest. Let op fake-outs op 5/15min.',
+    critical: false
+  },
+  {
+    id: 'rr_room',
+    label: 'Minimaal 2R ruimte naar target',
+    detail: 'Reken voor: afstand naar volgend level / EMA / VWAP. Geen ruimte = geen trade.',
+    critical: true
+  },
+  {
+    id: 'atr_ok',
+    label: 'ATR laat de trade nog toe',
+    detail: 'ATR tussen 80-120% (alleen op D en 4u TF betrouwbaar). Te hoog = al uitgespeeld.',
+    critical: false
+  },
+  {
+    id: 'hammer_candle',
+    label: 'Bevestigingscandle gespot (hammer / pin op 3 of 5min TF)',
+    detail: 'Of andere setup-specifieke confirmatie. Niet zomaar "het ziet er goed uit".',
+    critical: false
+  },
+  {
+    id: 'indices_check',
+    label: 'Andere grote indexen gecheckt (US500, US100, US30)',
+    detail: 'Lopen ze in dezelfde richting? Divergentie = waarschuwing.',
+    critical: false
+  },
+  {
+    id: 'risk_1pct',
+    label: 'Risk maximaal 1% van mijn drawdown',
+    detail: 'Op een €360k account met X% drawdown beschikbaar: bereken vooraf je max €-risico per trade.',
+    critical: true
+  },
+  {
+    id: 'sl_correct',
+    label: 'Stop loss correct geplaatst (op 3min TF)',
+    detail: 'Logische plaats (achter level/wik/structuur), niet willekeurig dichtbij om size te vergroten.',
+    critical: true
+  }
+];
+
+// ==================== SUPABASE STORAGE ====================
+let supabase = null;
+let currentUser = null;
+
+function initSupabase() {
+  const url = localStorage.getItem('sb_url');
+  const key = localStorage.getItem('sb_key');
+  if (url && key && window.supabase) {
+    supabase = window.supabase.createClient(url, key);
+    return true;
+  }
+  return false;
+}
+
+async function setupSupabase(mode) {
+  const url = document.getElementById('setupUrl').value.trim();
+  const key = document.getElementById('setupKey').value.trim();
+  const email = document.getElementById('setupEmail').value.trim();
+  const password = document.getElementById('setupPassword').value;
+  const errEl = document.getElementById('setupError');
+  errEl.textContent = '';
+  
+  if (!url || !key || !email || !password) {
+    errEl.textContent = 'Vul alle velden in.';
+    return;
+  }
+  
+  if (!url.startsWith('https://') || !url.includes('supabase')) {
+    errEl.textContent = 'URL moet beginnen met https:// en supabase bevatten.';
+    return;
+  }
+  
+  try {
+    localStorage.setItem('sb_url', url);
+    localStorage.setItem('sb_key', key);
+    supabase = window.supabase.createClient(url, key);
+    
+    let result;
+    if (mode === 'signup') {
+      result = await supabase.auth.signUp({ email, password });
+      if (result.error) throw result.error;
+      if (result.data.user && !result.data.session) {
+        errEl.style.color = '#10b981';
+        errEl.textContent = '✓ Account aangemaakt! Check je email voor bevestiging, daarna kan je inloggen.';
+        return;
+      }
+    } else {
+      result = await supabase.auth.signInWithPassword({ email, password });
+      if (result.error) throw result.error;
+    }
+    
+    currentUser = result.data.user;
+    document.getElementById('setupModal').style.display = 'none';
+    document.getElementById('userEmail').textContent = currentUser.email;
+    showToast('Ingelogd');
+    await loadAllData();
+    renderChecklist();
+    renderTodayTrades();
+    renderStrategyChecklist();
+    loadSettings();
+    updateTradeWarning();
+  } catch (err) {
+    errEl.textContent = 'Fout: ' + err.message;
+  }
+}
+
+async function checkAuth() {
+  if (!initSupabase()) {
+    document.getElementById('setupModal').style.display = 'block';
+    return false;
+  }
+  
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) {
+    document.getElementById('setupModal').style.display = 'block';
+    return false;
+  }
+  
+  currentUser = session.user;
+  document.getElementById('userEmail').textContent = currentUser.email;
+  return true;
+}
+
+async function logout() {
+  if (supabase) await supabase.auth.signOut();
+  localStorage.removeItem('sb_url');
+  localStorage.removeItem('sb_key');
+  location.reload();
+}
+
+// Storage wrapper using Supabase
+const cloudStorage = {
+  async getAll(table) {
+    if (!supabase || !currentUser) return [];
+    const { data, error } = await supabase.from(table).select('*').eq('user_id', currentUser.id);
+    if (error) { console.error(error); return []; }
+    return data || [];
+  },
+  async getOne(table, idField, idValue) {
+    if (!supabase || !currentUser) return null;
+    const { data, error } = await supabase.from(table)
+      .select('*').eq('user_id', currentUser.id).eq(idField, idValue).maybeSingle();
+    if (error) { console.error(error); return null; }
+    return data;
+  },
+  async upsert(table, record) {
+    if (!supabase || !currentUser) return null;
+    record.user_id = currentUser.id;
+    const { data, error } = await supabase.from(table).upsert(record).select();
+    if (error) throw error;
+    return data;
+  },
+  async delete(table, idField, idValue) {
+    if (!supabase || !currentUser) return;
+    await supabase.from(table).delete().eq('user_id', currentUser.id).eq(idField, idValue);
+  }
+};
+
+// ==================== STATE ====================
+let state = {
+  todayChecklist: null,
+  trades: [],
+  checklistHistory: [],
+  dayReviews: [],
+  settings: { maxTrades: 3, dailyLoss: 500, riskPerTrade: 1 }
+};
+
+const today = () => new Date().toISOString().split('T')[0];
+
+// ==================== STORAGE FUNCTIONS ====================
+async function loadAllData() {
+  if (!supabase || !currentUser) return;
+  
+  state.trades = [];
+  state.checklistHistory = [];
+  state.dayReviews = [];
+  state.todayChecklist = null;
+  
+  try {
+    // Load trades
+    const trades = await cloudStorage.getAll('trades');
+    state.trades = trades.map(t => ({ ...t, ...(t.data || {}) }));
+    state.trades.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+    
+    // Load checklists
+    const checklists = await cloudStorage.getAll('checklists');
+    state.checklistHistory = checklists.map(c => ({ ...c, ...(c.data || {}) }));
+    state.checklistHistory.sort((a, b) => b.date.localeCompare(a.date));
+    state.todayChecklist = state.checklistHistory.find(c => c.date === today()) || null;
+    
+    // Load reviews
+    const reviews = await cloudStorage.getAll('reviews');
+    state.dayReviews = reviews.map(r => ({ ...r, ...(r.data || {}) }));
+    
+    // Load settings
+    const settings = await cloudStorage.getOne('settings', 'user_id', currentUser.id);
+    if (settings && settings.data) state.settings = settings.data;
+    
+  } catch (err) {
+    console.error('Load error:', err);
+    showToast('Fout bij laden: ' + err.message, true);
+  }
+}
+
+// ==================== CHECKLIST ====================
+function renderChecklist() {
+  const container = document.getElementById('checklistItems');
+  const groups = {
+    critical: { title: 'Kritieke factoren (5 ptn elk - deal-breakers)', items: [] },
+    medium: { title: 'Middelzware factoren (3 ptn elk)', items: [] },
+    light: { title: 'Lichte factoren (1 pt elk)', items: [] }
+  };
+  
+  CHECKLIST_ITEMS.forEach(item => groups[item.group].items.push(item));
+  
+  let html = '';
+  for (const [g, data] of Object.entries(groups)) {
+    const totalPoints = data.items.reduce((s, i) => s + i.points, 0);
+    html += `<div class="checklist-group">
+      <div class="group-header">
+        <span class="group-title">${data.title}</span>
+        <span class="group-weight">Max: ${totalPoints} ptn</span>
+      </div>`;
+    
+    data.items.forEach(item => {
+      const checked = state.todayChecklist && state.todayChecklist.checks[item.id] ? 'checked' : '';
+      html += `<div class="check-item ${item.group}" onclick="toggleCheck('${item.id}', event)">
+        <input type="checkbox" id="check-${item.id}" ${checked} onclick="event.stopPropagation(); toggleCheck('${item.id}', event)">
+        <label for="check-${item.id}">${item.label}</label>
+        <span class="check-points">+${item.points}</span>
+      </div>`;
+    });
+    html += '</div>';
+  }
+  
+  container.innerHTML = html;
+  updateScore();
+  updateTodayChecklistInfo();
+}
+
+function toggleCheck(id, event) {
+  if (event && event.target.tagName !== 'INPUT') {
+    const cb = document.getElementById(`check-${id}`);
+    cb.checked = !cb.checked;
+  }
+  updateScore();
+}
+
+function updateScore() {
+  let score = 0;
+  let criticalFailed = false;
+  let criticalFailedNames = [];
+  
+  CHECKLIST_ITEMS.forEach(item => {
+    const cb = document.getElementById(`check-${item.id}`);
+    if (cb && cb.checked) {
+      score += item.points;
+    } else if (item.deal_breaker) {
+      criticalFailed = true;
+      criticalFailedNames.push(item.label);
+    }
+  });
+  
+  const display = document.getElementById('scoreDisplay');
+  const numEl = document.getElementById('scoreNumber');
+  const labelEl = document.getElementById('scoreLabel');
+  const adviceEl = document.getElementById('scoreAdvice');
+  
+  numEl.textContent = `${score} / ${MAX_SCORE}`;
+  
+  display.classList.remove('go', 'caution', 'nogo');
+  
+  if (criticalFailed) {
+    display.classList.add('nogo');
+    labelEl.textContent = '🚫 GEEN LIVE TRADING';
+    adviceEl.innerHTML = `Kritieke factor gefaald: <strong>${criticalFailedNames.join(', ')}</strong>. Eén kritieke faal = stop, ongeacht totaalscore.`;
+  } else if (score < 30) {
+    display.classList.add('nogo');
+    labelEl.textContent = '🚫 GEEN TRADING VANDAAG';
+    adviceEl.textContent = `Score onder 30. Werk aan de basis vandaag, geen trading.`;
+  } else if (score < 38) {
+    display.classList.add('caution');
+    labelEl.textContent = '⚠️ ENKEL SIM TRADING';
+    adviceEl.textContent = `Score 30-37. Alleen demo/sim trading toegestaan vandaag.`;
+  } else if (score < 40) {
+    display.classList.add('caution');
+    labelEl.textContent = '⚠️ LIVE MET HALVE SIZE';
+    adviceEl.textContent = `Score 38-39. Live mag, maar verklein positiegrootte met 50%.`;
+  } else {
+    display.classList.add('go');
+    labelEl.textContent = '✅ LIVE TRADING OK';
+    adviceEl.textContent = `Score ${score}/${MAX_SCORE}. Volg je plan, respecteer je limieten.`;
+  }
+}
+
+async function saveChecklist() {
+  const checks = {};
+  let score = 0;
+  let criticalFailed = false;
+  
+  CHECKLIST_ITEMS.forEach(item => {
+    const cb = document.getElementById(`check-${item.id}`);
+    checks[item.id] = cb.checked;
+    if (cb.checked) score += item.points;
+    else if (item.deal_breaker) criticalFailed = true;
+  });
+  
+  const checklist = {
+    date: today(),
+    timestamp: new Date().toISOString(),
+    checks,
+    score,
+    maxScore: MAX_SCORE,
+    criticalFailed,
+    status: criticalFailed || score < 30 ? 'no-trade' : score < 38 ? 'sim-only' : score < 40 ? 'live-half-size' : 'live-full'
+  };
+  
+  try {
+    await cloudStorage.upsert('checklists', { date: today(), data: checklist });
+    state.todayChecklist = checklist;
+    
+    // Update history
+    state.checklistHistory = state.checklistHistory.filter(c => c.date !== today());
+    state.checklistHistory.unshift(checklist);
+    
+    showToast('Checklist opgeslagen voor vandaag');
+    updateTodayChecklistInfo();
+    updateTradeWarning();
+  } catch (err) {
+    showToast('Fout bij opslaan: ' + err.message, true);
+  }
+}
+
+function updateTodayChecklistInfo() {
+  const el = document.getElementById('todayChecklistInfo');
+  if (state.todayChecklist) {
+    const t = new Date(state.todayChecklist.timestamp);
+    el.innerHTML = `Laatst opgeslagen: ${t.toLocaleTimeString('nl-BE', {hour:'2-digit', minute:'2-digit'})} - Status: <strong>${state.todayChecklist.status}</strong>`;
+  } else {
+    el.textContent = 'Nog niet opgeslagen voor vandaag.';
+  }
+}
+
+// ==================== STRATEGY CHECKLIST RENDERING ====================
+function renderStrategyChecklist() {
+  const setup = document.getElementById('tradeSetup').value;
+  const container = document.getElementById('strategyChecklistContainer');
+  
+  if (!setup || !STRATEGY_CHECKLISTS[setup]) {
+    container.innerHTML = '<div class="info-box" style="margin-top:16px;">💡 Kies een setup-type hierboven om de strategie-specifieke checklist te zien.</div>';
+    return;
+  }
+  
+  const strategy = STRATEGY_CHECKLISTS[setup];
+  let html = `<h3>Strategie Checklist: ${strategy.name}</h3>`;
+  html += `<div class="info-box">${strategy.description}</div>`;
+  html += '<div class="info-box" style="background:#1e3a8a;">📋 <strong>Vergeet niet:</strong> de algemene Pre-Trade Check (apart tabblad) doe je vóór deze strategie-checklist.</div>';
+  
+  // Strategy-specific sections
+  strategy.sections.forEach((section, si) => {
+    const borderColor = section.critical ? '#ef4444' : '#f59e0b';
+    const groupClass = section.critical ? 'critical' : 'medium';
+    html += `<div class="card" style="background:#0f172a; padding:16px; margin-bottom:12px; border-left:3px solid ${borderColor};">`;
+    html += `<div style="font-weight:600; margin-bottom:10px; color:#f1f5f9;">${section.title} ${section.critical ? '<span style="color:#ef4444; font-size:11px; margin-left:8px;">KRITIEK</span>' : ''}</div>`;
+    section.items.forEach((item, ii) => {
+      const id = `s${si}-i${ii}`;
+      html += `<div class="check-item ${groupClass}" onclick="toggleStrategyCheck('${id}', event)" style="margin-bottom:4px;">
+        <input type="checkbox" id="strat-${id}" data-strategy="${setup}" data-critical="${section.critical}" onclick="event.stopPropagation(); updateStrategyScore();">
+        <label for="strat-${id}">${item}</label>
+      </div>`;
+    });
+    html += '</div>';
+  });
+  
+  html += '<div id="strategyScoreInfo" style="margin-top:12px; padding:14px; border-radius:8px; font-size:14px;"></div>';
+  container.innerHTML = html;
+  updateStrategyScore();
+}
+
+function toggleStrategyCheck(id, event) {
+  if (event && event.target.tagName !== 'INPUT') {
+    const cb = document.getElementById(`strat-${id}`);
+    if (cb) cb.checked = !cb.checked;
+    updateStrategyScore();
+  }
+}
+
+function updateStrategyScore() {
+  const setup = document.getElementById('tradeSetup').value;
+  const infoEl = document.getElementById('strategyScoreInfo');
+  if (!infoEl) return;
+  
+  const allChecks = document.querySelectorAll('input[id^="strat-"]');
+  const total = allChecks.length;
+  let checked = 0;
+  let criticalTotal = 0;
+  let criticalChecked = 0;
+  let universalTotal = 0;
+  let universalChecked = 0;
+  
+  allChecks.forEach(cb => {
+    if (cb.checked) checked++;
+    if (cb.dataset.strategy === 'universal') {
+      universalTotal++;
+      if (cb.checked) universalChecked++;
+    }
+    if (cb.dataset.critical === 'true') {
+      criticalTotal++;
+      if (cb.checked) criticalChecked++;
+    }
+  });
+  
+  const pct = total > 0 ? (checked / total * 100) : 0;
+  const critPct = criticalTotal > 0 ? (criticalChecked / criticalTotal * 100) : 100;
+  
+  let bgColor, msg;
+  if (critPct < 80 || pct < 60) {
+    bgColor = 'linear-gradient(135deg, #991b1b, #b91c1c)';
+    msg = `🚫 NIET TRADEN. Kritieke checks: ${criticalChecked}/${criticalTotal} (${critPct.toFixed(0)}%). Totaal: ${checked}/${total} (${pct.toFixed(0)}%). Te veel ontbreekt.`;
+  } else if (critPct < 100 || pct < 80) {
+    bgColor = 'linear-gradient(135deg, #92400e, #b45309)';
+    msg = `⚠️ TWIJFEL. Kritieke: ${criticalChecked}/${criticalTotal} (${critPct.toFixed(0)}%). Totaal: ${checked}/${total} (${pct.toFixed(0)}%). Overweeg te skippen of halve size.`;
+  } else {
+    bgColor = 'linear-gradient(135deg, #065f46, #047857)';
+    msg = `✅ SETUP COMPLEET. Alle ${criticalTotal} kritieke checks ✓. Totaal: ${checked}/${total} (${pct.toFixed(0)}%). Trade volgens plan.`;
+  }
+  infoEl.style.background = bgColor;
+  infoEl.style.color = 'white';
+  infoEl.innerHTML = msg;
+}
+
+function getStrategyChecklistData() {
+  const checks = {};
+  document.querySelectorAll('input[id^="strat-"]').forEach(cb => {
+    const label = document.querySelector(`label[for="${cb.id}"]`);
+    if (label) checks[label.textContent] = cb.checked;
+  });
+  return checks;
+}
+
+// ==================== PRE-TRADE CHECK FUNCTIONS ====================
+let currentPreTradeCheck = {};
+
+function renderPreTradeCheck() {
+  const container = document.getElementById('preTradeChecksContainer');
+  if (!container) return;
+  
+  let html = '';
+  PRE_TRADE_CHECKS.forEach(check => {
+    const checked = currentPreTradeCheck[check.id] ? 'checked' : '';
+    const borderColor = check.critical ? '#ef4444' : '#f59e0b';
+    const tag = check.critical ? '<span style="color:#ef4444; font-size:10px; margin-left:8px; padding:2px 6px; background:rgba(239,68,68,0.15); border-radius:3px;">KRITIEK</span>' : '';
+    html += `<div class="card" style="background:#0f172a; padding:14px; margin-bottom:10px; border-left:3px solid ${borderColor}; cursor:pointer;" onclick="togglePreTradeCheck('${check.id}', event)">
+      <div style="display:flex; align-items:flex-start; gap:12px;">
+        <input type="checkbox" id="pt-${check.id}" ${checked} onclick="event.stopPropagation(); togglePreTradeCheck('${check.id}')" style="margin-top:3px; width:20px; height:20px; accent-color:#3b82f6; cursor:pointer;">
+        <div style="flex:1;">
+          <label for="pt-${check.id}" style="font-weight:600; color:#f1f5f9; cursor:pointer; display:block; margin-bottom:4px;">${check.label}${tag}</label>
+          <div style="font-size:12px; color:#94a3b8; line-height:1.4;">${check.detail}</div>
+        </div>
+      </div>
+    </div>`;
+  });
+  container.innerHTML = html;
+  updatePreTradeScore();
+}
+
+function togglePreTradeCheck(id, event) {
+  if (event && event.target.tagName !== 'INPUT') {
+    const cb = document.getElementById(`pt-${id}`);
+    if (cb) cb.checked = !cb.checked;
+  }
+  const cb = document.getElementById(`pt-${id}`);
+  currentPreTradeCheck[id] = cb.checked;
+  updatePreTradeScore();
+}
+
+function updatePreTradeScore() {
+  const total = PRE_TRADE_CHECKS.length;
+  let checked = 0;
+  let criticalTotal = 0;
+  let criticalChecked = 0;
+  let criticalMissing = [];
+  
+  PRE_TRADE_CHECKS.forEach(c => {
+    const isChecked = !!currentPreTradeCheck[c.id];
+    if (isChecked) checked++;
+    if (c.critical) {
+      criticalTotal++;
+      if (isChecked) criticalChecked++;
+      else criticalMissing.push(c.label);
+    }
+  });
+  
+  const pct = (checked / total * 100).toFixed(0);
+  const critPct = (criticalChecked / criticalTotal * 100).toFixed(0);
+  const infoEl = document.getElementById('preTradeScoreInfo');
+  if (!infoEl) return;
+  
+  let bg, msg;
+  if (criticalChecked < criticalTotal) {
+    bg = 'linear-gradient(135deg, #991b1b, #b91c1c)';
+    msg = `🚫 NIET TRADEN. Kritieke checks ontbreken (${criticalChecked}/${criticalTotal}):<br><br>` +
+          criticalMissing.map(m => `• ${m}`).join('<br>');
+  } else if (checked < total - 2) {
+    bg = 'linear-gradient(135deg, #92400e, #b45309)';
+    msg = `⚠️ TWIJFEL. Alle kritieke checks ✓ maar nog veel niet-kritieke open (${checked}/${total}). Overweeg halve size.`;
+  } else {
+    bg = 'linear-gradient(135deg, #065f46, #047857)';
+    msg = `✅ TRADE OK. ${checked}/${total} checks voldaan, alle ${criticalTotal} kritieke ✓.`;
+  }
+  
+  infoEl.style.background = bg;
+  infoEl.style.color = 'white';
+  infoEl.innerHTML = msg;
+}
+
+function resetPreTradeCheck() {
+  currentPreTradeCheck = {};
+  renderPreTradeCheck();
+  showToast('Pre-Trade Check gereset');
+}
+
+function getPreTradeCheckData() {
+  // Return current state of pre-trade checks for saving with trade
+  const result = {};
+  PRE_TRADE_CHECKS.forEach(c => {
+    result[c.label] = !!currentPreTradeCheck[c.id];
+  });
+  result._criticalCount = PRE_TRADE_CHECKS.filter(c => c.critical && currentPreTradeCheck[c.id]).length;
+  result._criticalTotal = PRE_TRADE_CHECKS.filter(c => c.critical).length;
+  result._totalChecked = PRE_TRADE_CHECKS.filter(c => currentPreTradeCheck[c.id]).length;
+  result._totalChecks = PRE_TRADE_CHECKS.length;
+  return result;
+}
+
+// ==================== TRADES ====================
+async function saveTrade() {
+  const pnl = parseFloat(document.getElementById('tradePnL').value) || 0;
+  const entry = parseFloat(document.getElementById('tradeEntry').value);
+  
+  if (!entry) {
+    showToast('Vul minimaal entry prijs en P&L in', true);
+    return;
+  }
+  
+  const trade = {
+    id: `t_${Date.now()}_${Math.random().toString(36).substr(2,5)}`,
+    timestamp: new Date().toISOString(),
+    date: today(),
+    instrument: document.getElementById('tradeInstrument').value,
+    direction: document.getElementById('tradeDirection').value,
+    session: document.getElementById('tradeSession').value,
+    timeBlock: document.getElementById('tradeTimeBlock').value,
+    entry,
+    exit: parseFloat(document.getElementById('tradeExit').value) || null,
+    stop: parseFloat(document.getElementById('tradeStop').value) || null,
+    target: parseFloat(document.getElementById('tradeTarget').value) || null,
+    pnl,
+    size: parseFloat(document.getElementById('tradeSize').value) || 1,
+    setup: document.getElementById('tradeSetup').value,
+    planFollowed: document.getElementById('tradePlanFollowed').value,
+    emotions: {
+      stress: parseInt(document.getElementById('emotionStress').value),
+      confidence: parseInt(document.getElementById('emotionConfidence').value),
+      fomo: parseInt(document.getElementById('emotionFomo').value),
+      frustration: parseInt(document.getElementById('emotionFrustration').value),
+      satisfaction: parseInt(document.getElementById('emotionSatisfaction').value)
+    },
+    reason: document.getElementById('tradeReason').value,
+    lessons: document.getElementById('tradeLessons').value,
+    checklistScore: state.todayChecklist ? state.todayChecklist.score : null,
+    checklistStatus: state.todayChecklist ? state.todayChecklist.status : null,
+    strategyChecklist: getStrategyChecklistData(),
+    preTradeCheck: getPreTradeCheckData()
+  };
+  
+  try {
+    await cloudStorage.upsert('trades', { id: trade.id, data: trade });
+    state.trades.unshift(trade);
+    showToast('Trade opgeslagen');
+    clearTradeForm();
+    currentPreTradeCheck = {}; // Reset pre-trade check for next trade
+    renderTodayTrades();
+    updateTradeWarning();
+  } catch (err) {
+    showToast('Fout bij opslaan: ' + err.message, true);
+  }
+}
+
+function clearTradeForm() {
+  ['tradeEntry', 'tradeExit', 'tradeStop', 'tradeTarget', 'tradePnL', 'tradeSize', 'tradeReason', 'tradeLessons'].forEach(id => {
+    document.getElementById(id).value = '';
+  });
+  // Reset strategy checklist checkboxes
+  document.querySelectorAll('input[id^="strat-"]').forEach(cb => cb.checked = false);
+  updateStrategyScore();
+}
+
+function updateTradeWarning() {
+  const el = document.getElementById('tradeWarning');
+  let warnings = [];
+  
+  if (!state.todayChecklist) {
+    warnings.push('<div class="warning-box">⚠️ Je hebt vandaag nog geen <strong>Pre-Market Checklist</strong> ingevuld. Doe dit eerst.</div>');
+  } else if (state.todayChecklist.status === 'no-trade') {
+    warnings.push('<div class="warning-box">🚫 Je Pre-Market checklist zegt: GEEN TRADING vandaag. Het feit dat je toch wil loggen is een signaal. Heroverweeg.</div>');
+  } else if (state.todayChecklist.status === 'sim-only') {
+    warnings.push('<div class="warning-box">⚠️ Je Pre-Market checklist zegt: enkel SIM trading. Markeer dit duidelijk in notities.</div>');
+  }
+  
+  // Pre-trade check status
+  const ptData = getPreTradeCheckData();
+  if (ptData._totalChecked === 0) {
+    warnings.push('<div class="warning-box">⚠️ Geen <strong>Pre-Trade Check</strong> ingevuld. Doe dit vóór je instapt (apart tabblad).</div>');
+  } else if (ptData._criticalCount < ptData._criticalTotal) {
+    warnings.push(`<div class="warning-box">🚫 Pre-Trade Check: <strong>${ptData._criticalCount}/${ptData._criticalTotal} kritieke checks</strong>. Trade niet plaatsen.</div>`);
+  }
+  
+  // Daily trade limit
+  const todayTrades = state.trades.filter(t => t.date === today());
+  if (todayTrades.length >= state.settings.maxTrades) {
+    warnings.push(`<div class="warning-box">⚠️ Daglimiet bereikt: ${todayTrades.length}/${state.settings.maxTrades} trades. STOP.</div>`);
+  }
+  
+  el.innerHTML = warnings.join('');
+}
+
+function renderTodayTrades() {
+  const todayTrades = state.trades.filter(t => t.date === today());
+  const el = document.getElementById('todayTrades');
+  
+  if (todayTrades.length === 0) {
+    el.innerHTML = '<div class="empty-state">Nog geen trades vandaag.</div>';
+    return;
+  }
+  
+  let totalPnL = 0;
+  let wins = 0;
+  todayTrades.forEach(t => { totalPnL += t.pnl; if (t.pnl > 0) wins++; });
+  
+  let html = `<div class="stats-row">
+    <div class="stat-box"><div class="stat-label">Aantal</div><div class="stat-value">${todayTrades.length}/${state.settings.maxTrades}</div></div>
+    <div class="stat-box"><div class="stat-label">P&L</div><div class="stat-value ${totalPnL>=0?'pnl-positive':'pnl-negative'}">€${totalPnL.toFixed(2)}</div></div>
+    <div class="stat-box"><div class="stat-label">Win rate</div><div class="stat-value">${todayTrades.length>0?Math.round(wins/todayTrades.length*100):0}%</div></div>
+  </div>`;
+  
+  html += '<table><thead><tr><th>Tijd</th><th>Instrument</th><th>Richting</th><th>Setup</th><th>P&L</th><th>Plan?</th></tr></thead><tbody>';
+  todayTrades.forEach(t => {
+    const time = new Date(t.timestamp).toLocaleTimeString('nl-BE', {hour:'2-digit', minute:'2-digit'});
+    html += `<tr>
+      <td>${time}</td>
+      <td>${t.instrument}</td>
+      <td>${t.direction}</td>
+      <td>${t.setup || '-'}</td>
+      <td class="${t.pnl>=0?'pnl-positive':'pnl-negative'}">€${t.pnl.toFixed(2)}</td>
+      <td>${t.planFollowed}</td>
+    </tr>`;
+  });
+  html += '</tbody></table>';
+  el.innerHTML = html;
+}
+
+// ==================== DAY REVIEW ====================
+async function saveDayReview() {
+  const review = {
+    date: today(),
+    timestamp: new Date().toISOString(),
+    planAdherence: parseInt(document.getElementById('reviewPlanAdherence').value),
+    discipline: parseInt(document.getElementById('reviewDiscipline').value),
+    brokenRules: document.getElementById('reviewBrokenRules').value,
+    good: document.getElementById('reviewGood').value,
+    improve: document.getElementById('reviewImprove').value,
+    lesson: document.getElementById('reviewLesson').value
+  };
+  
+  try {
+    await cloudStorage.upsert('reviews', { date: today(), data: review });
+    state.dayReviews = state.dayReviews.filter(r => r.date !== today());
+    state.dayReviews.push(review);
+    showToast('Dag afgesloten');
+  } catch (err) {
+    showToast('Fout bij opslaan: ' + err.message, true);
+  }
+}
+
+function renderDayStats() {
+  const todayTrades = state.trades.filter(t => t.date === today());
+  let totalPnL = 0;
+  let wins = 0;
+  todayTrades.forEach(t => { totalPnL += t.pnl; if (t.pnl > 0) wins++; });
+  
+  const el = document.getElementById('dayStats');
+  el.innerHTML = `
+    <div class="stat-box"><div class="stat-label">Trades</div><div class="stat-value">${todayTrades.length}</div></div>
+    <div class="stat-box"><div class="stat-label">Wins</div><div class="stat-value pnl-positive">${wins}</div></div>
+    <div class="stat-box"><div class="stat-label">Losses</div><div class="stat-value pnl-negative">${todayTrades.length-wins}</div></div>
+    <div class="stat-box"><div class="stat-label">P&L</div><div class="stat-value ${totalPnL>=0?'pnl-positive':'pnl-negative'}">€${totalPnL.toFixed(2)}</div></div>
+    <div class="stat-box"><div class="stat-label">Win Rate</div><div class="stat-value">${todayTrades.length>0?Math.round(wins/todayTrades.length*100):0}%</div></div>
+  `;
+}
+
+// ==================== HISTORY ====================
+function renderHistory() {
+  const allEl = document.getElementById('allTrades');
+  if (state.trades.length === 0) {
+    allEl.innerHTML = '<div class="empty-state">Nog geen trades.</div>';
+  } else {
+    let html = '<table><thead><tr><th>Datum</th><th>Tijd</th><th>Instrument</th><th>Richting</th><th>Setup</th><th>P&L</th><th>Plan?</th><th>Score</th></tr></thead><tbody>';
+    state.trades.forEach(t => {
+      const d = new Date(t.timestamp);
+      html += `<tr>
+        <td>${d.toLocaleDateString('nl-BE')}</td>
+        <td>${d.toLocaleTimeString('nl-BE', {hour:'2-digit', minute:'2-digit'})}</td>
+        <td>${t.instrument}</td>
+        <td>${t.direction}</td>
+        <td>${t.setup || '-'}</td>
+        <td class="${t.pnl>=0?'pnl-positive':'pnl-negative'}">€${t.pnl.toFixed(2)}</td>
+        <td>${t.planFollowed}</td>
+        <td>${t.checklistScore || '-'}</td>
+      </tr>`;
+    });
+    html += '</tbody></table>';
+    allEl.innerHTML = html;
+  }
+  
+  const histEl = document.getElementById('checklistHistory');
+  if (state.checklistHistory.length === 0) {
+    histEl.innerHTML = '<div class="empty-state">Nog geen checklist geschiedenis.</div>';
+  } else {
+    let html = '<table><thead><tr><th>Datum</th><th>Score</th><th>Status</th></tr></thead><tbody>';
+    state.checklistHistory.forEach(c => {
+      html += `<tr>
+        <td>${c.date}</td>
+        <td>${c.score}/${c.maxScore}</td>
+        <td>${c.status}</td>
+      </tr>`;
+    });
+    html += '</tbody></table>';
+    histEl.innerHTML = html;
+  }
+}
+
+// ==================== INSIGHTS ====================
+function renderInsights() {
+  const el = document.getElementById('insightsContent');
+  
+  if (state.trades.length < 3) {
+    el.innerHTML = '<div class="empty-state">Log minstens 3 trades om inzichten te zien.</div>';
+    return;
+  }
+  
+  // Overall stats
+  const totalPnL = state.trades.reduce((s, t) => s + t.pnl, 0);
+  const wins = state.trades.filter(t => t.pnl > 0);
+  const losses = state.trades.filter(t => t.pnl < 0);
+  const winRate = wins.length / state.trades.length * 100;
+  const avgWin = wins.length > 0 ? wins.reduce((s, t) => s + t.pnl, 0) / wins.length : 0;
+  const avgLoss = losses.length > 0 ? losses.reduce((s, t) => s + t.pnl, 0) / losses.length : 0;
+  const expectancy = (winRate/100 * avgWin) + ((1 - winRate/100) * avgLoss);
+  const profitFactor = losses.length > 0 ? Math.abs(wins.reduce((s,t)=>s+t.pnl,0) / losses.reduce((s,t)=>s+t.pnl,0)) : 0;
+  
+  let html = `<div class="insight-grid">
+    <div class="insight-card">
+      <h4>Totale P&L</h4>
+      <div class="insight-value ${totalPnL>=0?'pnl-positive':'pnl-negative'}">€${totalPnL.toFixed(2)}</div>
+      <div class="insight-detail">Over ${state.trades.length} trades</div>
+    </div>
+    <div class="insight-card">
+      <h4>Win Rate</h4>
+      <div class="insight-value">${winRate.toFixed(1)}%</div>
+      <div class="insight-detail">${wins.length}W / ${losses.length}L</div>
+    </div>
+    <div class="insight-card">
+      <h4>Expectancy</h4>
+      <div class="insight-value ${expectancy>=0?'pnl-positive':'pnl-negative'}">€${expectancy.toFixed(2)}</div>
+      <div class="insight-detail">Verwachte winst per trade</div>
+    </div>
+    <div class="insight-card">
+      <h4>Profit Factor</h4>
+      <div class="insight-value">${profitFactor.toFixed(2)}</div>
+      <div class="insight-detail">Boven 1.5 = goed, boven 2 = uitstekend</div>
+    </div>
+    <div class="insight-card">
+      <h4>Avg Win / Avg Loss</h4>
+      <div class="insight-value">${avgLoss !== 0 ? Math.abs(avgWin/avgLoss).toFixed(2) : '∞'}</div>
+      <div class="insight-detail">Avg win: €${avgWin.toFixed(2)} / Avg loss: €${avgLoss.toFixed(2)}</div>
+    </div>
+  </div>`;
+  
+  // Breakdown by instrument
+  html += '<h3 style="margin-top:24px;">Per Instrument</h3>';
+  html += renderBreakdown('instrument');
+  
+  // Breakdown by session
+  html += '<h3 style="margin-top:24px;">Per Sessie</h3>';
+  html += renderBreakdown('session');
+  
+  // Breakdown by time block
+  html += '<h3 style="margin-top:24px;">Per Tijdsblok</h3>';
+  html += renderBreakdown('timeBlock');
+  
+  // Breakdown by setup
+  html += '<h3 style="margin-top:24px;">Per Setup Type</h3>';
+  html += renderBreakdown('setup');
+  
+  // Plan adherence impact
+  html += '<h3 style="margin-top:24px;">Plan Gevolgd?</h3>';
+  html += renderBreakdown('planFollowed');
+  
+  // Checklist score correlation
+  html += '<h3 style="margin-top:24px;">Checklist Score vs P&L</h3>';
+  html += renderChecklistCorrelation();
+  
+  // Emotion correlations
+  html += '<h3 style="margin-top:24px;">Emotie Correlaties</h3>';
+  html += renderEmotionCorrelations();
+  
+  // Pattern detection
+  html += '<h3 style="margin-top:24px;">🔍 Patronen Gedetecteerd</h3>';
+  html += renderPatterns();
+  
+  el.innerHTML = html;
+}
+
+function renderBreakdown(field) {
+  const groups = {};
+  state.trades.forEach(t => {
+    const key = t[field] || 'onbekend';
+    if (!groups[key]) groups[key] = { trades: [], pnl: 0, wins: 0 };
+    groups[key].trades.push(t);
+    groups[key].pnl += t.pnl;
+    if (t.pnl > 0) groups[key].wins++;
+  });
+  
+  const sorted = Object.entries(groups).sort((a, b) => b[1].pnl - a[1].pnl);
+  const maxPnL = Math.max(...sorted.map(([,d]) => Math.abs(d.pnl)));
+  
+  let html = '<div class="card" style="background:#0f172a;">';
+  sorted.forEach(([key, data]) => {
+    const winRate = (data.wins / data.trades.length * 100).toFixed(0);
+    const width = maxPnL > 0 ? Math.abs(data.pnl) / maxPnL * 100 : 0;
+    html += `<div style="margin-bottom:12px;">
+      <div class="breakdown-row">
+        <span><strong>${key}</strong> (${data.trades.length} trades, ${winRate}% WR)</span>
+        <span class="${data.pnl>=0?'pnl-positive':'pnl-negative'}">€${data.pnl.toFixed(2)}</span>
+      </div>
+      <div class="breakdown-bar"><div class="breakdown-fill" style="width:${width}%; background:${data.pnl>=0?'linear-gradient(90deg,#10b981,#34d399)':'linear-gradient(90deg,#ef4444,#f87171)'};"></div></div>
+    </div>`;
+  });
+  html += '</div>';
+  return html;
+}
+
+function renderChecklistCorrelation() {
+  const buckets = {
+    'Score 40+': { trades: [], pnl: 0 },
+    'Score 38-39': { trades: [], pnl: 0 },
+    'Score 30-37': { trades: [], pnl: 0 },
+    'Score <30': { trades: [], pnl: 0 },
+    'Geen score': { trades: [], pnl: 0 }
+  };
+  
+  state.trades.forEach(t => {
+    let bucket;
+    if (t.checklistScore === null || t.checklistScore === undefined) bucket = 'Geen score';
+    else if (t.checklistScore >= 40) bucket = 'Score 40+';
+    else if (t.checklistScore >= 38) bucket = 'Score 38-39';
+    else if (t.checklistScore >= 30) bucket = 'Score 30-37';
+    else bucket = 'Score <30';
+    
+    buckets[bucket].trades.push(t);
+    buckets[bucket].pnl += t.pnl;
+  });
+  
+  let html = '<div class="card" style="background:#0f172a;">';
+  for (const [name, data] of Object.entries(buckets)) {
+    if (data.trades.length === 0) continue;
+    const avg = data.pnl / data.trades.length;
+    const wins = data.trades.filter(t => t.pnl > 0).length;
+    const wr = (wins / data.trades.length * 100).toFixed(0);
+    html += `<div class="breakdown-row">
+      <span><strong>${name}</strong> (${data.trades.length} trades, ${wr}% WR)</span>
+      <span class="${avg>=0?'pnl-positive':'pnl-negative'}">Avg: €${avg.toFixed(2)}</span>
+    </div>`;
+  }
+  html += '</div>';
+  return html;
+}
+
+function renderEmotionCorrelations() {
+  // Calculate correlation between each emotion and pnl
+  const emotions = ['stress', 'confidence', 'fomo', 'frustration', 'satisfaction'];
+  const emotionLabels = {
+    stress: 'Stress (voor)',
+    confidence: 'Vertrouwen (voor)',
+    fomo: 'FOMO (voor)',
+    frustration: 'Frustratie (na)',
+    satisfaction: 'Tevredenheid (na)'
+  };
+  
+  let html = '<div class="card" style="background:#0f172a;"><div style="font-size:13px; color:#94a3b8; margin-bottom:12px;">Avg P&L per emotie-niveau (1-3 = laag, 4-7 = midden, 8-10 = hoog)</div>';
+  
+  emotions.forEach(em => {
+    const buckets = { laag: { pnl: 0, count: 0 }, midden: { pnl: 0, count: 0 }, hoog: { pnl: 0, count: 0 } };
+    state.trades.forEach(t => {
+      if (!t.emotions || t.emotions[em] === undefined) return;
+      const v = t.emotions[em];
+      const b = v <= 3 ? 'laag' : v <= 7 ? 'midden' : 'hoog';
+      buckets[b].pnl += t.pnl;
+      buckets[b].count++;
+    });
+    
+    html += `<div style="margin-bottom:14px;"><strong>${emotionLabels[em]}:</strong>`;
+    for (const [name, data] of Object.entries(buckets)) {
+      if (data.count === 0) continue;
+      const avg = data.pnl / data.count;
+      html += ` <span style="margin-left:8px;">${name} (${data.count}): <span class="${avg>=0?'pnl-positive':'pnl-negative'}">€${avg.toFixed(2)}</span></span>`;
+    }
+    html += '</div>';
+  });
+  
+  html += '</div>';
+  return html;
+}
+
+function renderPatterns() {
+  const patterns = [];
+  
+  // Pre-trade check correlation
+  const ptFullTrades = state.trades.filter(t => t.preTradeCheck && t.preTradeCheck._totalChecked === t.preTradeCheck._totalChecks);
+  const ptPartialTrades = state.trades.filter(t => t.preTradeCheck && t.preTradeCheck._totalChecked > 0 && t.preTradeCheck._totalChecked < t.preTradeCheck._totalChecks);
+  if (ptFullTrades.length >= 3 && ptPartialTrades.length >= 3) {
+    const fullAvg = ptFullTrades.reduce((s,t)=>s+t.pnl,0)/ptFullTrades.length;
+    const partAvg = ptPartialTrades.reduce((s,t)=>s+t.pnl,0)/ptPartialTrades.length;
+    patterns.push(`📊 Volledige Pre-Trade Check ✓ (${ptFullTrades.length}x): avg €${fullAvg.toFixed(2)} | Onvolledige (${ptPartialTrades.length}x): avg €${partAvg.toFixed(2)}.`);
+  }
+  
+  // Pre-trade critical missing
+  const ptMissedCritical = state.trades.filter(t => t.preTradeCheck && t.preTradeCheck._criticalCount < t.preTradeCheck._criticalTotal);
+  if (ptMissedCritical.length >= 3) {
+    const avg = ptMissedCritical.reduce((s,t)=>s+t.pnl,0)/ptMissedCritical.length;
+    if (avg < 0) {
+      patterns.push(`🚨 Trades met gemiste KRITIEKE pre-checks (${ptMissedCritical.length}x) verliezen gemiddeld €${avg.toFixed(2)}. NOOIT meer doen.`);
+    }
+  }
+  
+  // Pattern 1: Best instrument
+  const byInstrument = {};
+  state.trades.forEach(t => {
+    if (!byInstrument[t.instrument]) byInstrument[t.instrument] = { pnl: 0, count: 0 };
+    byInstrument[t.instrument].pnl += t.pnl;
+    byInstrument[t.instrument].count++;
+  });
+  const bestInst = Object.entries(byInstrument).sort((a,b) => (b[1].pnl/b[1].count) - (a[1].pnl/a[1].count))[0];
+  const worstInst = Object.entries(byInstrument).sort((a,b) => (a[1].pnl/a[1].count) - (b[1].pnl/b[1].count))[0];
+  if (bestInst && bestInst[1].count >= 3) {
+    patterns.push(`✅ Je beste instrument is <strong>${bestInst[0]}</strong> met €${(bestInst[1].pnl/bestInst[1].count).toFixed(2)} avg per trade.`);
+  }
+  if (worstInst && worstInst[1].count >= 3 && worstInst[0] !== bestInst[0] && worstInst[1].pnl/worstInst[1].count < 0) {
+    patterns.push(`⚠️ <strong>${worstInst[0]}</strong> is je verlieslatige instrument met €${(worstInst[1].pnl/worstInst[1].count).toFixed(2)} avg. Overweeg te stoppen.`);
+  }
+  
+  // Pattern 2: Plan adherence impact
+  const planTrades = state.trades.filter(t => t.planFollowed === 'ja');
+  const noPlanTrades = state.trades.filter(t => t.planFollowed === 'nee');
+  if (planTrades.length >= 3 && noPlanTrades.length >= 3) {
+    const planAvg = planTrades.reduce((s,t)=>s+t.pnl,0)/planTrades.length;
+    const noPlanAvg = noPlanTrades.reduce((s,t)=>s+t.pnl,0)/noPlanTrades.length;
+    patterns.push(`📊 Met plan: avg €${planAvg.toFixed(2)} | Zonder plan: avg €${noPlanAvg.toFixed(2)}. Verschil: €${(planAvg-noPlanAvg).toFixed(2)}.`);
+  }
+  
+  // Pattern 3: High FOMO trades
+  const highFomo = state.trades.filter(t => t.emotions && t.emotions.fomo >= 7);
+  if (highFomo.length >= 3) {
+    const avgFomo = highFomo.reduce((s,t)=>s+t.pnl,0)/highFomo.length;
+    if (avgFomo < 0) {
+      patterns.push(`🚨 Trades met hoge FOMO (${highFomo.length}x) verliezen gemiddeld €${avgFomo.toFixed(2)}. STOP met FOMO trades.`);
+    }
+  }
+  
+  // Pattern 4: Low checklist score impact
+  const lowScoreTrades = state.trades.filter(t => t.checklistScore && t.checklistScore < 38);
+  const highScoreTrades = state.trades.filter(t => t.checklistScore && t.checklistScore >= 40);
+  if (lowScoreTrades.length >= 3 && highScoreTrades.length >= 3) {
+    const lowAvg = lowScoreTrades.reduce((s,t)=>s+t.pnl,0)/lowScoreTrades.length;
+    const highAvg = highScoreTrades.reduce((s,t)=>s+t.pnl,0)/highScoreTrades.length;
+    patterns.push(`📈 Hoge checklist score (40+): avg €${highAvg.toFixed(2)} | Lage score (<38): avg €${lowAvg.toFixed(2)}.`);
+  }
+  
+  // Pattern 5: Best time block
+  const byTime = {};
+  state.trades.forEach(t => {
+    if (!byTime[t.timeBlock]) byTime[t.timeBlock] = { pnl: 0, count: 0 };
+    byTime[t.timeBlock].pnl += t.pnl;
+    byTime[t.timeBlock].count++;
+  });
+  const bestTime = Object.entries(byTime).filter(([,d])=>d.count>=3).sort((a,b) => (b[1].pnl/b[1].count) - (a[1].pnl/a[1].count))[0];
+  if (bestTime) {
+    patterns.push(`⏰ Beste tijdsblok: <strong>${bestTime[0]}</strong> met €${(bestTime[1].pnl/bestTime[1].count).toFixed(2)} avg.`);
+  }
+  
+  // Pattern 6: Direction bias
+  const longs = state.trades.filter(t => t.direction === 'long');
+  const shorts = state.trades.filter(t => t.direction === 'short');
+  if (longs.length >= 5 && shorts.length >= 5) {
+    const longAvg = longs.reduce((s,t)=>s+t.pnl,0)/longs.length;
+    const shortAvg = shorts.reduce((s,t)=>s+t.pnl,0)/shorts.length;
+    if (Math.abs(longAvg - shortAvg) > 50) {
+      patterns.push(`🔄 Long avg: €${longAvg.toFixed(2)} | Short avg: €${shortAvg.toFixed(2)}. Je hebt een richting-bias.`);
+    }
+  }
+  
+  if (patterns.length === 0) {
+    return '<div class="empty-state">Niet genoeg data voor patronen. Blijf loggen.</div>';
+  }
+  
+  let html = '<div class="card" style="background:#0f172a;">';
+  patterns.forEach(p => {
+    html += `<div style="padding:12px; margin-bottom:8px; background:#1e293b; border-radius:6px; border-left:3px solid #3b82f6; font-size:14px;">${p}</div>`;
+  });
+  html += '</div>';
+  return html;
+}
+
+// ==================== SETTINGS ====================
+async function saveSettings() {
+  state.settings.maxTrades = parseInt(document.getElementById('settingMaxTrades').value);
+  state.settings.dailyLoss = parseFloat(document.getElementById('settingDailyLoss').value);
+  state.settings.riskPerTrade = parseFloat(document.getElementById('settingRiskPerTrade').value);
+  
+  try {
+    await cloudStorage.upsert('settings', { user_id: currentUser.id, data: state.settings });
+    showToast('Instellingen opgeslagen');
+  } catch (err) {
+    showToast('Fout: ' + err.message, true);
+  }
+}
+
+function loadSettings() {
+  document.getElementById('settingMaxTrades').value = state.settings.maxTrades;
+  document.getElementById('settingDailyLoss').value = state.settings.dailyLoss;
+  document.getElementById('settingRiskPerTrade').value = state.settings.riskPerTrade;
+}
+
+// ==================== EXPORT / RESET ====================
+function exportData() {
+  const data = {
+    exportDate: new Date().toISOString(),
+    trades: state.trades,
+    checklistHistory: state.checklistHistory,
+    dayReviews: state.dayReviews,
+    settings: state.settings
+  };
+  const blob = new Blob([JSON.stringify(data, null, 2)], {type: 'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `trading-journal-${today()}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+  showToast('Data geëxporteerd');
+}
+
+async function resetAllData() {
+  if (!confirm('Zeker weten? Alle data wordt verwijderd. Dit kan niet ongedaan worden gemaakt.')) return;
+  if (!confirm('Echt zeker? Maak eerst een export!')) return;
+  
+  try {
+    // Delete all trades
+    for (const t of state.trades) {
+      try { await cloudStorage.delete('trades', 'id', t.id); } catch(e) {}
+    }
+    // Delete all checklists
+    for (const c of state.checklistHistory) {
+      try { await cloudStorage.delete('checklists', 'date', c.date); } catch(e) {}
+    }
+    // Delete all reviews
+    for (const r of state.dayReviews) {
+      try { await cloudStorage.delete('reviews', 'date', r.date); } catch(e) {}
+    }
+    try { await cloudStorage.delete('settings', 'user_id', currentUser.id); } catch(e) {}
+    
+    state = {
+      todayChecklist: null,
+      trades: [],
+      checklistHistory: [],
+      dayReviews: [],
+      settings: { maxTrades: 3, dailyLoss: 500, riskPerTrade: 1 }
+    };
+    
+    showToast('Alle data gereset');
+    renderChecklist();
+    renderTodayTrades();
+    renderHistory();
+    renderInsights();
+    loadSettings();
+  } catch (err) {
+    showToast('Fout bij reset: ' + err.message, true);
+  }
+}
+
+// ==================== UI ====================
+function showToast(msg, isError = false) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast' + (isError ? ' error show' : ' show');
+  setTimeout(() => t.className = 'toast' + (isError ? ' error' : ''), 3000);
+}
+
+function setupNavigation() {
+  document.querySelectorAll('nav button').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+      btn.classList.add('active');
+      const panel = document.getElementById('panel-' + btn.dataset.panel);
+      panel.classList.add('active');
+      
+      // Render content for the panel
+      if (btn.dataset.panel === 'pretrade') renderPreTradeCheck();
+      if (btn.dataset.panel === 'trades') { updateTradeWarning(); renderTodayTrades(); renderStrategyChecklist(); }
+      if (btn.dataset.panel === 'history') renderHistory();
+      if (btn.dataset.panel === 'insights') renderInsights();
+      if (btn.dataset.panel === 'dayreview') renderDayStats();
+      if (btn.dataset.panel === 'settings') loadSettings();
+    });
+  });
+}
+
+function showDate() {
+  const d = new Date();
+  document.getElementById('dateDisplay').textContent = d.toLocaleDateString('nl-BE', {
+    weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
+  });
+}
+
+// ==================== INIT ====================
+async function init() {
+  showDate();
+  setupNavigation();
+  
+  const authenticated = await checkAuth();
+  if (!authenticated) return; // Modal is showing, will continue after login
+  
+  await loadAllData();
+  
+  document.getElementById('loadingChecklist').style.display = 'none';
+  document.getElementById('checklistContent').style.display = 'block';
+  
+  renderChecklist();
+  renderTodayTrades();
+  renderStrategyChecklist();
+  loadSettings();
+  updateTradeWarning();
+}
+
+// Wait for Supabase library to load before init
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', init);
+} else {
+  init();
+}
+</script>
+</body>
+</html>
