@@ -908,6 +908,11 @@
         <label>Risico per trade (% van account)</label>
         <input type="number" id="settingRiskPerTrade" value="1" min="0.1" max="5" step="0.1">
       </div>
+      <div class="form-group" style="margin-bottom:16px;">
+        <label>Breakeven drempel (€)</label>
+        <input type="number" id="settingBreakevenThreshold" value="5" min="0" step="0.5">
+        <div style="font-size:11px; color:#94a3b8; margin-top:4px;">Trades met P&L tussen ±deze drempel tellen als breakeven, niet als winst of verlies.</div>
+      </div>
       <button class="primary" onclick="saveSettings()">Instellingen opslaan</button>
     </div>
     <div class="card">
@@ -1377,10 +1382,37 @@ let state = {
   trades: [],
   checklistHistory: [],
   dayReviews: [],
-  settings: { maxTrades: 3, dailyLoss: 500, riskPerTrade: 1, customInstruments: [] }
+  settings: { maxTrades: 3, dailyLoss: 500, riskPerTrade: 1, breakevenThreshold: 5, customInstruments: [] }
 };
 
 const today = () => new Date().toISOString().split('T')[0];
+
+// ==================== TRADE CLASSIFICATION ====================
+// Treat trades within ±breakevenThreshold as breakeven (not win or loss)
+function getBreakevenThreshold() {
+  return state.settings && state.settings.breakevenThreshold !== undefined 
+    ? state.settings.breakevenThreshold 
+    : 5;
+}
+
+function isWin(trade) {
+  return trade.pnl > getBreakevenThreshold();
+}
+
+function isLoss(trade) {
+  return trade.pnl < -getBreakevenThreshold();
+}
+
+function isBreakeven(trade) {
+  const t = getBreakevenThreshold();
+  return trade.pnl >= -t && trade.pnl <= t;
+}
+
+function classifyTrade(trade) {
+  if (isWin(trade)) return 'win';
+  if (isLoss(trade)) return 'loss';
+  return 'breakeven';
+}
 
 // ==================== STORAGE FUNCTIONS ====================
 async function loadAllData() {
@@ -2231,24 +2263,37 @@ function renderTodayTrades() {
   }
   
   let totalPnL = 0;
-  let wins = 0;
-  todayTrades.forEach(t => { totalPnL += t.pnl; if (t.pnl > 0) wins++; });
+  let wins = 0, losses = 0, breakevens = 0;
+  todayTrades.forEach(t => { 
+    totalPnL += t.pnl; 
+    const cls = classifyTrade(t);
+    if (cls === 'win') wins++;
+    else if (cls === 'loss') losses++;
+    else breakevens++;
+  });
+  const decisive = wins + losses;
+  const winRate = decisive > 0 ? Math.round(wins/decisive*100) : 0;
   
   let html = `<div class="stats-row">
     <div class="stat-box"><div class="stat-label">Aantal</div><div class="stat-value">${todayTrades.length}/${state.settings.maxTrades}</div></div>
     <div class="stat-box"><div class="stat-label">P&L</div><div class="stat-value ${totalPnL>=0?'pnl-positive':'pnl-negative'}">€${totalPnL.toFixed(2)}</div></div>
-    <div class="stat-box"><div class="stat-label">Win rate</div><div class="stat-value">${todayTrades.length>0?Math.round(wins/todayTrades.length*100):0}%</div></div>
+    <div class="stat-box"><div class="stat-label">W / L / BE</div><div class="stat-value" style="font-size:18px;"><span class="pnl-positive">${wins}</span> / <span class="pnl-negative">${losses}</span> / <span style="color:#94a3b8;">${breakevens}</span></div></div>
+    <div class="stat-box"><div class="stat-label">Win rate (excl BE)</div><div class="stat-value">${winRate}%</div></div>
   </div>`;
   
-  html += '<table><thead><tr><th>Tijd</th><th>Instrument</th><th>Richting</th><th>Setup</th><th>P&L</th><th>Plan?</th></tr></thead><tbody>';
+  html += '<table><thead><tr><th>Tijd</th><th>Instrument</th><th>Richting</th><th>Setup</th><th>P&L</th><th>Type</th><th>Plan?</th></tr></thead><tbody>';
   todayTrades.forEach(t => {
     const time = new Date(t.timestamp).toLocaleTimeString('nl-BE', {hour:'2-digit', minute:'2-digit'});
+    const cls = classifyTrade(t);
+    const pnlColor = cls === 'win' ? 'pnl-positive' : cls === 'loss' ? 'pnl-negative' : '';
+    const typeLabel = cls === 'win' ? '<span class="pnl-positive">W</span>' : cls === 'loss' ? '<span class="pnl-negative">L</span>' : '<span style="color:#94a3b8;">BE</span>';
     html += `<tr>
       <td>${time}</td>
       <td>${t.instrument}</td>
       <td>${t.direction}</td>
       <td>${t.setup || '-'}</td>
-      <td class="${t.pnl>=0?'pnl-positive':'pnl-negative'}">€${t.pnl.toFixed(2)}</td>
+      <td class="${pnlColor}" style="${cls==='breakeven'?'color:#94a3b8;':''}">€${t.pnl.toFixed(2)}</td>
+      <td>${typeLabel}</td>
       <td>${t.planFollowed}</td>
     </tr>`;
   });
@@ -2282,16 +2327,25 @@ async function saveDayReview() {
 function renderDayStats() {
   const todayTrades = state.trades.filter(t => t.date === today());
   let totalPnL = 0;
-  let wins = 0;
-  todayTrades.forEach(t => { totalPnL += t.pnl; if (t.pnl > 0) wins++; });
+  let wins = 0, losses = 0, breakevens = 0;
+  todayTrades.forEach(t => { 
+    totalPnL += t.pnl; 
+    const cls = classifyTrade(t);
+    if (cls === 'win') wins++;
+    else if (cls === 'loss') losses++;
+    else breakevens++;
+  });
+  const decisive = wins + losses;
+  const winRate = decisive > 0 ? Math.round(wins/decisive*100) : 0;
   
   const el = document.getElementById('dayStats');
   el.innerHTML = `
     <div class="stat-box"><div class="stat-label">Trades</div><div class="stat-value">${todayTrades.length}</div></div>
     <div class="stat-box"><div class="stat-label">Wins</div><div class="stat-value pnl-positive">${wins}</div></div>
-    <div class="stat-box"><div class="stat-label">Losses</div><div class="stat-value pnl-negative">${todayTrades.length-wins}</div></div>
+    <div class="stat-box"><div class="stat-label">Losses</div><div class="stat-value pnl-negative">${losses}</div></div>
+    <div class="stat-box"><div class="stat-label">Breakeven</div><div class="stat-value" style="color:#94a3b8;">${breakevens}</div></div>
     <div class="stat-box"><div class="stat-label">P&L</div><div class="stat-value ${totalPnL>=0?'pnl-positive':'pnl-negative'}">€${totalPnL.toFixed(2)}</div></div>
-    <div class="stat-box"><div class="stat-label">Win Rate</div><div class="stat-value">${todayTrades.length>0?Math.round(wins/todayTrades.length*100):0}%</div></div>
+    <div class="stat-box"><div class="stat-label">Win Rate (excl BE)</div><div class="stat-value">${winRate}%</div></div>
   `;
 }
 
@@ -2384,31 +2438,34 @@ function renderInsights() {
     return;
   }
   
-  // Overall stats (now using filtered)
+  // Overall stats (now using filtered + breakeven classification)
   const totalPnL = filtered.reduce((s, t) => s + t.pnl, 0);
-  const wins = filtered.filter(t => t.pnl > 0);
-  const losses = filtered.filter(t => t.pnl < 0);
-  const winRate = wins.length / filtered.length * 100;
+  const wins = filtered.filter(t => isWin(t));
+  const losses = filtered.filter(t => isLoss(t));
+  const breakevens = filtered.filter(t => isBreakeven(t));
+  const decisive = wins.length + losses.length; // BE excluded from win rate calculation
+  const winRate = decisive > 0 ? wins.length / decisive * 100 : 0;
   const avgWin = wins.length > 0 ? wins.reduce((s, t) => s + t.pnl, 0) / wins.length : 0;
   const avgLoss = losses.length > 0 ? losses.reduce((s, t) => s + t.pnl, 0) / losses.length : 0;
-  const expectancy = (winRate/100 * avgWin) + ((1 - winRate/100) * avgLoss);
+  const expectancy = decisive > 0 ? (winRate/100 * avgWin) + ((1 - winRate/100) * avgLoss) : 0;
   const profitFactor = losses.length > 0 ? Math.abs(wins.reduce((s,t)=>s+t.pnl,0) / losses.reduce((s,t)=>s+t.pnl,0)) : 0;
+  const beThreshold = getBreakevenThreshold();
   
   let html = filterHtml + `<div class="insight-grid">
     <div class="insight-card">
       <h4>Totale P&L</h4>
       <div class="insight-value ${totalPnL>=0?'pnl-positive':'pnl-negative'}">€${totalPnL.toFixed(2)}</div>
-      <div class="insight-detail">Over ${filtered.length} trades</div>
+      <div class="insight-detail">Over ${filtered.length} trades (BE drempel: ±€${beThreshold})</div>
     </div>
     <div class="insight-card">
       <h4>Win Rate</h4>
       <div class="insight-value">${winRate.toFixed(1)}%</div>
-      <div class="insight-detail">${wins.length}W / ${losses.length}L</div>
+      <div class="insight-detail">${wins.length}W / ${losses.length}L / ${breakevens.length}BE (BE niet meegerekend)</div>
     </div>
     <div class="insight-card">
       <h4>Expectancy</h4>
       <div class="insight-value ${expectancy>=0?'pnl-positive':'pnl-negative'}">€${expectancy.toFixed(2)}</div>
-      <div class="insight-detail">Verwachte winst per trade</div>
+      <div class="insight-detail">Verwachte winst per beslissende trade</div>
     </div>
     <div class="insight-card">
       <h4>Profit Factor</h4>
@@ -2484,12 +2541,12 @@ function renderInsights() {
 
 function renderDurationBreakdown(trades) {
   const buckets = {
-    '< 5 min': { trades: [], pnl: 0, wins: 0 },
-    '5-15 min': { trades: [], pnl: 0, wins: 0 },
-    '15-30 min': { trades: [], pnl: 0, wins: 0 },
-    '30-60 min': { trades: [], pnl: 0, wins: 0 },
-    '> 60 min': { trades: [], pnl: 0, wins: 0 },
-    'Onbekend': { trades: [], pnl: 0, wins: 0 }
+    '< 5 min': { trades: [], pnl: 0, wins: 0, losses: 0, breakevens: 0 },
+    '5-15 min': { trades: [], pnl: 0, wins: 0, losses: 0, breakevens: 0 },
+    '15-30 min': { trades: [], pnl: 0, wins: 0, losses: 0, breakevens: 0 },
+    '30-60 min': { trades: [], pnl: 0, wins: 0, losses: 0, breakevens: 0 },
+    '> 60 min': { trades: [], pnl: 0, wins: 0, losses: 0, breakevens: 0 },
+    'Onbekend': { trades: [], pnl: 0, wins: 0, losses: 0, breakevens: 0 }
   };
   
   trades.forEach(t => {
@@ -2504,7 +2561,10 @@ function renderDurationBreakdown(trades) {
     
     buckets[bucket].trades.push(t);
     buckets[bucket].pnl += t.pnl;
-    if (t.pnl > 0) buckets[bucket].wins++;
+    const cls = classifyTrade(t);
+    if (cls === 'win') buckets[bucket].wins++;
+    else if (cls === 'loss') buckets[bucket].losses++;
+    else buckets[bucket].breakevens++;
   });
   
   // Filter empty buckets
@@ -2518,12 +2578,14 @@ function renderDurationBreakdown(trades) {
   let html = '<div style="margin-bottom:16px;"><div style="font-weight:600; color:#cbd5e1; margin-bottom:8px; font-size:14px;">Duur in trade</div>';
   html += '<div class="card" style="background:#0f172a; padding:12px;">';
   filledBuckets.forEach(([key, data]) => {
-    const winRate = (data.wins / data.trades.length * 100).toFixed(0);
+    const decisive = data.wins + data.losses;
+    const winRate = decisive > 0 ? (data.wins / decisive * 100).toFixed(0) : '-';
+    const beNote = data.breakevens > 0 ? `, ${data.breakevens}BE` : '';
     const width = maxPnL > 0 ? Math.abs(data.pnl) / maxPnL * 100 : 0;
     const avgPnL = (data.pnl / data.trades.length).toFixed(2);
     html += `<div style="margin-bottom:10px;">
       <div class="breakdown-row">
-        <span style="font-size:13px;"><strong>${key}</strong> (${data.trades.length}x, ${winRate}% WR, avg €${avgPnL})</span>
+        <span style="font-size:13px;"><strong>${key}</strong> (${data.trades.length}x, ${winRate}% WR${beNote}, avg €${avgPnL})</span>
         <span class="${data.pnl>=0?'pnl-positive':'pnl-negative'}">€${data.pnl.toFixed(2)}</span>
       </div>
       <div class="breakdown-bar"><div class="breakdown-fill" style="width:${width}%; background:${data.pnl>=0?'linear-gradient(90deg,#10b981,#34d399)':'linear-gradient(90deg,#ef4444,#f87171)'};"></div></div>
@@ -2538,10 +2600,13 @@ function renderEvaluationBreakdown(field, label, trades) {
   trades.forEach(t => {
     const val = t.evaluation && t.evaluation[field];
     if (!val) return; // Skip empty
-    if (!groups[val]) groups[val] = { trades: [], pnl: 0, wins: 0 };
+    if (!groups[val]) groups[val] = { trades: [], pnl: 0, wins: 0, losses: 0, breakevens: 0 };
     groups[val].trades.push(t);
     groups[val].pnl += t.pnl;
-    if (t.pnl > 0) groups[val].wins++;
+    const cls = classifyTrade(t);
+    if (cls === 'win') groups[val].wins++;
+    else if (cls === 'loss') groups[val].losses++;
+    else groups[val].breakevens++;
   });
   
   if (Object.keys(groups).length === 0) {
@@ -2554,12 +2619,14 @@ function renderEvaluationBreakdown(field, label, trades) {
   let html = `<div style="margin-bottom:16px;"><div style="font-weight:600; color:#cbd5e1; margin-bottom:8px; font-size:14px;">${label}</div>`;
   html += '<div class="card" style="background:#0f172a; padding:12px;">';
   sorted.forEach(([key, data]) => {
-    const winRate = (data.wins / data.trades.length * 100).toFixed(0);
+    const decisive = data.wins + data.losses;
+    const winRate = decisive > 0 ? (data.wins / decisive * 100).toFixed(0) : '-';
+    const beNote = data.breakevens > 0 ? `, ${data.breakevens}BE` : '';
     const width = maxPnL > 0 ? Math.abs(data.pnl) / maxPnL * 100 : 0;
     const avgPnL = (data.pnl / data.trades.length).toFixed(2);
     html += `<div style="margin-bottom:10px;">
       <div class="breakdown-row">
-        <span style="font-size:13px;"><strong>${key}</strong> (${data.trades.length}x, ${winRate}% WR, avg €${avgPnL})</span>
+        <span style="font-size:13px;"><strong>${key}</strong> (${data.trades.length}x, ${winRate}% WR${beNote}, avg €${avgPnL})</span>
         <span class="${data.pnl>=0?'pnl-positive':'pnl-negative'}">€${data.pnl.toFixed(2)}</span>
       </div>
       <div class="breakdown-bar"><div class="breakdown-fill" style="width:${width}%; background:${data.pnl>=0?'linear-gradient(90deg,#10b981,#34d399)':'linear-gradient(90deg,#ef4444,#f87171)'};"></div></div>
@@ -2574,10 +2641,13 @@ function renderBreakdown(field, trades) {
   const groups = {};
   data_set.forEach(t => {
     const key = t[field] || 'onbekend';
-    if (!groups[key]) groups[key] = { trades: [], pnl: 0, wins: 0 };
+    if (!groups[key]) groups[key] = { trades: [], pnl: 0, wins: 0, losses: 0, breakevens: 0 };
     groups[key].trades.push(t);
     groups[key].pnl += t.pnl;
-    if (t.pnl > 0) groups[key].wins++;
+    const cls = classifyTrade(t);
+    if (cls === 'win') groups[key].wins++;
+    else if (cls === 'loss') groups[key].losses++;
+    else groups[key].breakevens++;
   });
   
   const sorted = Object.entries(groups).sort((a, b) => b[1].pnl - a[1].pnl);
@@ -2585,11 +2655,13 @@ function renderBreakdown(field, trades) {
   
   let html = '<div class="card" style="background:#0f172a;">';
   sorted.forEach(([key, data]) => {
-    const winRate = (data.wins / data.trades.length * 100).toFixed(0);
+    const decisive = data.wins + data.losses;
+    const winRate = decisive > 0 ? (data.wins / decisive * 100).toFixed(0) : '-';
+    const beNote = data.breakevens > 0 ? `, ${data.breakevens}BE` : '';
     const width = maxPnL > 0 ? Math.abs(data.pnl) / maxPnL * 100 : 0;
     html += `<div style="margin-bottom:12px;">
       <div class="breakdown-row">
-        <span><strong>${key}</strong> (${data.trades.length} trades, ${winRate}% WR)</span>
+        <span><strong>${key}</strong> (${data.trades.length} trades, ${winRate}% WR${beNote})</span>
         <span class="${data.pnl>=0?'pnl-positive':'pnl-negative'}">€${data.pnl.toFixed(2)}</span>
       </div>
       <div class="breakdown-bar"><div class="breakdown-fill" style="width:${width}%; background:${data.pnl>=0?'linear-gradient(90deg,#10b981,#34d399)':'linear-gradient(90deg,#ef4444,#f87171)'};"></div></div>
@@ -2623,8 +2695,10 @@ function renderChecklistCorrelation(trades) {
   for (const [name, data] of Object.entries(buckets)) {
     if (data.trades.length === 0) continue;
     const avg = data.pnl / data.trades.length;
-    const wins = data.trades.filter(t => t.pnl > 0).length;
-    const wr = (wins / data.trades.length * 100).toFixed(0);
+    const wins = data.trades.filter(t => isWin(t)).length;
+    const losses = data.trades.filter(t => isLoss(t)).length;
+    const decisive = wins + losses;
+    const wr = decisive > 0 ? (wins / decisive * 100).toFixed(0) : '-';
     html += `<div class="breakdown-row">
       <span><strong>${name}</strong> (${data.trades.length} trades, ${wr}% WR)</span>
       <span class="${avg>=0?'pnl-positive':'pnl-negative'}">Avg: €${avg.toFixed(2)}</span>
@@ -2677,8 +2751,8 @@ function renderPatterns(trades) {
   // Duration patterns
   const withDuration = data_set.filter(t => t.durationMinutes !== null && t.durationMinutes !== undefined);
   if (withDuration.length >= 6) {
-    const winningTrades = withDuration.filter(t => t.pnl > 0);
-    const losingTrades = withDuration.filter(t => t.pnl < 0);
+    const winningTrades = withDuration.filter(t => isWin(t));
+    const losingTrades = withDuration.filter(t => isLoss(t));
     if (winningTrades.length >= 3 && losingTrades.length >= 3) {
       const avgWinDur = winningTrades.reduce((s, t) => s + t.durationMinutes, 0) / winningTrades.length;
       const avgLossDur = losingTrades.reduce((s, t) => s + t.durationMinutes, 0) / losingTrades.length;
@@ -2794,10 +2868,14 @@ async function saveSettings() {
   state.settings.maxTrades = parseInt(document.getElementById('settingMaxTrades').value);
   state.settings.dailyLoss = parseFloat(document.getElementById('settingDailyLoss').value);
   state.settings.riskPerTrade = parseFloat(document.getElementById('settingRiskPerTrade').value);
+  state.settings.breakevenThreshold = parseFloat(document.getElementById('settingBreakevenThreshold').value) || 0;
   
   try {
     await cloudStorage.upsert('settings', { user_id: currentUser.id, data: state.settings }, 'user_id');
     showToast('Instellingen opgeslagen');
+    // Re-render insights and today's trades since classification changed
+    renderInsights();
+    renderTodayTrades();
   } catch (err) {
     showToast('Fout: ' + err.message, true);
   }
@@ -2807,6 +2885,7 @@ function loadSettings() {
   document.getElementById('settingMaxTrades').value = state.settings.maxTrades;
   document.getElementById('settingDailyLoss').value = state.settings.dailyLoss;
   document.getElementById('settingRiskPerTrade').value = state.settings.riskPerTrade;
+  document.getElementById('settingBreakevenThreshold').value = state.settings.breakevenThreshold !== undefined ? state.settings.breakevenThreshold : 5;
   renderInstrumentOptions();
 }
 
