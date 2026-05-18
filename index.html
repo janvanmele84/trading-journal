@@ -2070,6 +2070,18 @@ function showTradeScreenshot(tradeId) {
   }
   if (trade.planFollowed) addRow('Plan gevolgd', trade.planFollowed);
   
+  // Trade analyse velden (niet afleidbaar uit screenshot)
+  const ev = trade.evaluation || {};
+  if (ev.dailyTrend) addRow('Mee met daily trend', translateLabel(ev.dailyTrend));
+  if (ev.indices) addRow('Indexen in de rug', translateLabel(ev.indices));
+  if (ev.stoppedOut) addRow('Indien uitgetikt', translateLabel(ev.stoppedOut));
+  if (ev.mentorFollowed) {
+    const mentorVal = ev.mentorFollowed === 'ja' && ev.mentorName 
+      ? `Ja — ${ev.mentorName}` 
+      : translateLabel(ev.mentorFollowed);
+    addRow('Mentor gevolgd', mentorVal);
+  }
+  
   detailsEl.innerHTML = detailsHtml || '<div style="color:#64748b;">Geen notities bij deze trade.</div>';
   modal.style.display = 'block';
 }
