@@ -427,6 +427,7 @@
     <div id="screenshotViewerCaption" style="color:#f1f5f9; margin-bottom:16px; font-size:16px; font-weight:600; padding-right:40px;"></div>
     <div id="screenshotViewerImages" style="display:grid; gap:12px; margin-bottom:20px;"></div>
     <div id="screenshotViewerDetails" style="background:#1e293b; border-radius:8px; padding:18px; color:#e2e8f0; font-size:14px; line-height:1.6;"></div>
+    <div id="screenshotViewerActions" style="display:flex; gap:8px; margin-top:16px; justify-content:flex-end;"></div>
   </div>
 </div>
 
@@ -721,12 +722,12 @@
           </select>
         </div>
         <div class="form-group">
-          <label>9 EMA invloed?</label>
-          <select id="evalEma">
-            <option value="">-- Selecteer --</option>
-            <option value="positive">Ja, positief (steun/weerstand werkte)</option>
-            <option value="negative">Ja, negatief (extensie / fake-out)</option>
-            <option value="neutral">Geen merkbare invloed</option>
+          <label>Indien gevoelsmatig afgesloten</label>
+          <select id="evalManualClose">
+            <option value="">-- Selecteer (alleen bij handmatige exit) --</option>
+            <option value="manual_went_after">Vertrok daarna alsnog (te vroeg gesloten)</option>
+            <option value="manual_never_worked">Deed nooit wat zou moeten (terecht gesloten)</option>
+            <option value="manual_na">Niet gevoelsmatig gesloten / N/A</option>
           </select>
         </div>
         <div class="form-group">
@@ -742,11 +743,10 @@
           <label>Exit strategie</label>
           <select id="evalExit">
             <option value="">-- Selecteer --</option>
-            <option value="2R_secured">2R gepakt (op veilig gespeeld)</option>
-            <option value="trailed_sl">SL meeverschoven (laten lopen)</option>
-            <option value="manual_exit">Handmatig gesloten (gevoelsmatig)</option>
-            <option value="stopped_out">Stop loss geraakt</option>
-            <option value="full_target">Volledige target gehaald</option>
+            <option value="2R_secured">2R gepakt</option>
+            <option value="trailed_sl">SL mee verschoven (+2R)</option>
+            <option value="manual_exit">Handmatig gesloten</option>
+            <option value="stopped_out">Stoploss geraakt</option>
           </select>
         </div>
         <div class="form-group">
@@ -1431,15 +1431,18 @@ const LABEL_TRANSLATIONS = {
   'went_after': 'Uitgetikt, trade vertrok daarna',
   'never_worked': 'Uitgetikt, trade werkte nooit',
   'not_applicable': 'Niet van toepassing',
+  'manual_went_after': 'Te vroeg gesloten, trade vertrok daarna alsnog',
+  'manual_never_worked': 'Terecht gesloten, trade werkte nooit',
+  'manual_na': 'Niet gevoelsmatig gesloten',
   // EMA/VWAP influence
   'positive': 'Positief (werkte)',
   'negative': 'Negatief (faalde)',
   'neutral': 'Geen invloed',
   // Exit strategy
   '2R_secured': '2R gepakt',
-  'trailed_sl': 'SL meeverschoven',
+  'trailed_sl': 'SL mee verschoven (+2R)',
   'manual_exit': 'Handmatig gesloten',
-  'stopped_out': 'Stop loss geraakt',
+  'stopped_out': 'Stoploss geraakt',
   'full_target': 'Volledige target',
   // ATR
   'nvt': 'N/A'
@@ -1912,6 +1915,7 @@ function getPreTradeCheckData() {
 
 // ==================== SCREENSHOT HANDLING ====================
 let currentScreenshots = [null, null]; // [slot1, slot2]
+let editingTradeId = null; // null = new trade, otherwise editing existing trade
 
 function calculateDurationMinutes(startStr, endStr) {
   if (!startStr || !endStr) return null;
@@ -2075,6 +2079,7 @@ function showTradeScreenshot(tradeId) {
   if (ev.dailyTrend) addRow('Mee met daily trend', translateLabel(ev.dailyTrend));
   if (ev.indices) addRow('Indexen in de rug', translateLabel(ev.indices));
   if (ev.stoppedOut) addRow('Indien uitgetikt', translateLabel(ev.stoppedOut));
+  if (ev.manualClose) addRow('Indien gevoelsmatig afgesloten', translateLabel(ev.manualClose));
   if (ev.mentorFollowed) {
     const mentorVal = ev.mentorFollowed === 'ja' && ev.mentorName 
       ? `Ja — ${ev.mentorName}` 
@@ -2083,6 +2088,16 @@ function showTradeScreenshot(tradeId) {
   }
   
   detailsEl.innerHTML = detailsHtml || '<div style="color:#64748b;">Geen notities bij deze trade.</div>';
+  
+  // Action buttons
+  const actionsEl = document.getElementById('screenshotViewerActions');
+  if (actionsEl) {
+    actionsEl.innerHTML = `
+      <button class="secondary" onclick="closeScreenshotViewer(); editTrade('${trade.id}')">✏️ Bewerken</button>
+      <button class="danger" style="padding:8px 16px;" onclick="deleteTrade('${trade.id}')">🗑️ Verwijderen</button>
+    `;
+  }
+  
   modal.style.display = 'block';
 }
 
@@ -2282,10 +2297,12 @@ async function saveTrade() {
     return;
   }
   
+  const existingTrade = editingTradeId ? state.trades.find(t => t.id === editingTradeId) : null;
+  
   const trade = {
-    id: `t_${Date.now()}_${Math.random().toString(36).substr(2,5)}`,
-    timestamp: new Date().toISOString(),
-    date: today(),
+    id: existingTrade ? existingTrade.id : `t_${Date.now()}_${Math.random().toString(36).substr(2,5)}`,
+    timestamp: existingTrade ? existingTrade.timestamp : new Date().toISOString(),
+    date: existingTrade ? existingTrade.date : today(),
     instrument: getInstrumentValue(),
     direction: document.getElementById('tradeDirection').value,
     session: document.getElementById('tradeSession').value,
@@ -2307,7 +2324,7 @@ async function saveTrade() {
       timeframe: document.getElementById('evalTimeframe').value,
       hammer: document.getElementById('evalHammer').value,
       stoppedOut: document.getElementById('evalStoppedOut').value,
-      ema: document.getElementById('evalEma').value,
+      manualClose: document.getElementById('evalManualClose').value,
       vwap: document.getElementById('evalVwap').value,
       exit: document.getElementById('evalExit').value,
       atr: document.getElementById('evalAtr').value,
@@ -2331,22 +2348,171 @@ async function saveTrade() {
     },
     reason: document.getElementById('tradeReason').value,
     lessons: document.getElementById('tradeLessons').value,
-    checklistScore: state.todayChecklist ? state.todayChecklist.score : null,
-    checklistStatus: state.todayChecklist ? state.todayChecklist.status : null,
+    checklistScore: existingTrade ? existingTrade.checklistScore : (state.todayChecklist ? state.todayChecklist.score : null),
+    checklistStatus: existingTrade ? existingTrade.checklistStatus : (state.todayChecklist ? state.todayChecklist.status : null),
     strategyChecklist: getStrategyChecklistData(),
     preTradeCheck: getPreTradeCheckData()
   };
   
   try {
     await cloudStorage.upsert('trades', { id: trade.id, data: trade });
-    state.trades.unshift(trade);
-    showToast('Trade opgeslagen');
+    if (existingTrade) {
+      // Replace in state
+      const idx = state.trades.findIndex(t => t.id === trade.id);
+      if (idx !== -1) state.trades[idx] = trade;
+      showToast('Trade bijgewerkt');
+      editingTradeId = null;
+      cancelEditMode();
+      // Go back to history to see the result
+      switchToPanel('history');
+      renderHistory();
+    } else {
+      state.trades.unshift(trade);
+      showToast('Trade opgeslagen');
+    }
     clearTradeForm();
     currentPreTradeCheck = {}; // Reset pre-trade check for next trade
     renderTodayTrades();
     updateTradeWarning();
   } catch (err) {
     showToast('Fout bij opslaan: ' + err.message, true);
+  }
+}
+
+function editTrade(tradeId) {
+  const trade = state.trades.find(t => t.id === tradeId);
+  if (!trade) return;
+  
+  editingTradeId = tradeId;
+  
+  // Switch to trade logging panel
+  switchToPanel('trades');
+  
+  // Fill the form with existing values
+  const setVal = (id, value) => { const el = document.getElementById(id); if (el) el.value = value !== undefined && value !== null ? value : ''; };
+  
+  // Instrument: check if it's a standard option, else use custom
+  const instrSelect = document.getElementById('tradeInstrument');
+  const standardInstruments = ['DAX', 'UK100', 'XAU', 'US30', 'US100', 'US500'];
+  const customs = (state.settings && state.settings.customInstruments) || [];
+  if (standardInstruments.includes(trade.instrument) || customs.includes(trade.instrument)) {
+    instrSelect.value = trade.instrument;
+    document.getElementById('tradeInstrumentCustom').style.display = 'none';
+  } else if (trade.instrument) {
+    instrSelect.value = '__custom__';
+    const customInput = document.getElementById('tradeInstrumentCustom');
+    customInput.style.display = 'block';
+    customInput.value = trade.instrument;
+  }
+  
+  setVal('tradeDirection', trade.direction);
+  setVal('tradeSession', trade.session);
+  setVal('tradeTimeBlock', trade.timeBlock);
+  setVal('tradeExactTime', trade.exactTime);
+  setVal('tradeExitTime', trade.exitTime);
+  updateTradeDuration();
+  setVal('tradeEntry', trade.entry);
+  setVal('tradeExit', trade.exit);
+  setVal('tradeStop', trade.stop);
+  setVal('tradeTarget', trade.target);
+  setVal('tradePnL', trade.pnl);
+  setVal('tradeSize', trade.size);
+  setVal('tradeSetup', trade.setup);
+  setVal('tradePlanFollowed', trade.planFollowed);
+  setVal('tradeImprovement', trade.improvement);
+  
+  // Evaluation fields
+  const ev = trade.evaluation || {};
+  setVal('evalDailyTrend', ev.dailyTrend);
+  setVal('evalLevel', ev.level);
+  setVal('evalLevelPrecision', ev.levelPrecision);
+  setVal('evalIndices', ev.indices);
+  setVal('evalTimeframe', ev.timeframe);
+  setVal('evalHammer', ev.hammer);
+  setVal('evalStoppedOut', ev.stoppedOut);
+  setVal('evalManualClose', ev.manualClose);
+  setVal('evalVwap', ev.vwap);
+  setVal('evalExit', ev.exit);
+  setVal('evalAtr', ev.atr);
+  setVal('evalMentorFollowed', ev.mentorFollowed);
+  setVal('evalMentorName', ev.mentorName);
+  toggleMentorNameField();
+  
+  // Emotions
+  const em = trade.emotions || {};
+  const setSlider = (id, value, def) => {
+    const el = document.getElementById(id);
+    const valEl = document.getElementById(id + 'Val');
+    if (el) { el.value = value !== undefined ? value : def; if (valEl) valEl.textContent = el.value; }
+  };
+  setSlider('emotionStress', em.stress, 5);
+  setSlider('emotionConfidence', em.confidence, 5);
+  setSlider('emotionFomo', em.fomo, 3);
+  setSlider('emotionFrustration', em.frustration, 3);
+  setSlider('emotionSatisfaction', em.satisfaction, 5);
+  
+  setVal('tradeReason', trade.reason);
+  setVal('tradeLessons', trade.lessons);
+  
+  // Screenshots
+  removeScreenshot(); // clear both
+  let existingScreenshots = [];
+  if (Array.isArray(trade.screenshots) && trade.screenshots.length > 0) {
+    existingScreenshots = trade.screenshots.filter(s => s);
+  } else if (trade.screenshot) {
+    existingScreenshots = [trade.screenshot];
+  }
+  if (existingScreenshots[0]) setScreenshot(existingScreenshots[0], 1);
+  if (existingScreenshots[1]) setScreenshot(existingScreenshots[1], 2);
+  
+  // Show edit-mode banner
+  showEditBanner(trade);
+  
+  // Scroll to top of form
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function showEditBanner(trade) {
+  let banner = document.getElementById('editModeBanner');
+  if (!banner) {
+    banner = document.createElement('div');
+    banner.id = 'editModeBanner';
+    banner.style.cssText = 'background:linear-gradient(135deg,#1e40af,#2563eb); color:white; padding:12px 16px; border-radius:8px; margin-bottom:16px; display:flex; justify-content:space-between; align-items:center; font-size:14px;';
+    const tradesPanel = document.getElementById('panel-trades');
+    const firstCard = tradesPanel.querySelector('.card');
+    tradesPanel.insertBefore(banner, firstCard);
+  }
+  const d = new Date(trade.timestamp);
+  banner.innerHTML = `<span>✏️ Je bewerkt een bestaande trade (${trade.instrument}, ${d.toLocaleDateString('nl-BE')}). Klik "Trade opslaan" om de wijzigingen te bewaren.</span>
+    <button onclick="cancelEditMode()" style="background:rgba(255,255,255,0.2); border:none; color:white; padding:6px 12px; border-radius:6px; cursor:pointer; font-size:13px; white-space:nowrap; margin-left:12px;">Annuleren</button>`;
+  banner.style.display = 'flex';
+}
+
+function cancelEditMode() {
+  editingTradeId = null;
+  const banner = document.getElementById('editModeBanner');
+  if (banner) banner.style.display = 'none';
+  clearTradeForm();
+  currentPreTradeCheck = {};
+}
+
+async function deleteTrade(tradeId) {
+  const trade = state.trades.find(t => t.id === tradeId);
+  if (!trade) return;
+  const d = new Date(trade.timestamp);
+  if (!confirm(`Trade verwijderen?\n\n${trade.instrument} ${trade.direction} - ${d.toLocaleDateString('nl-BE')} - €${trade.pnl.toFixed(2)}\n\nDit kan niet ongedaan worden gemaakt.`)) return;
+  
+  try {
+    await cloudStorage.delete('trades', 'id', tradeId);
+    state.trades = state.trades.filter(t => t.id !== tradeId);
+    showToast('Trade verwijderd');
+    renderHistory();
+    renderTodayTrades();
+    // Close the viewer modal if open
+    const modal = document.getElementById('screenshotViewerModal');
+    if (modal) modal.style.display = 'none';
+  } catch (err) {
+    showToast('Fout bij verwijderen: ' + err.message, true);
   }
 }
 
@@ -2362,7 +2528,7 @@ function clearTradeForm() {
     durDisplay.style.color = '#94a3b8';
   }
   // Reset all evaluation dropdowns
-  ['tradeImprovement', 'evalDailyTrend', 'evalLevel', 'evalLevelPrecision', 'evalIndices', 'evalTimeframe', 'evalHammer', 'evalStoppedOut', 'evalEma', 'evalVwap', 'evalExit', 'evalAtr', 'evalMentorFollowed'].forEach(id => {
+  ['tradeImprovement', 'evalDailyTrend', 'evalLevel', 'evalLevelPrecision', 'evalIndices', 'evalTimeframe', 'evalHammer', 'evalStoppedOut', 'evalManualClose', 'evalVwap', 'evalExit', 'evalAtr', 'evalMentorFollowed'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.value = '';
   });
@@ -2522,7 +2688,7 @@ function renderHistory() {
   if (state.trades.length === 0) {
     allEl.innerHTML = '<div class="empty-state">Nog geen trades.</div>';
   } else {
-    let html = '<table><thead><tr><th>Datum</th><th>Entry</th><th>Exit</th><th>Duur</th><th>Instrument</th><th>Richting</th><th>Setup</th><th>P&L</th><th>Plan?</th><th>Score</th><th>Detail</th></tr></thead><tbody>';
+    let html = '<table><thead><tr><th>Datum</th><th>Entry</th><th>Exit</th><th>Duur</th><th>Instrument</th><th>Richting</th><th>Setup</th><th>P&L</th><th>Plan?</th><th>Score</th><th>Acties</th></tr></thead><tbody>';
     state.trades.forEach(t => {
       const d = new Date(t.timestamp);
       const entryTime = t.exactTime || d.toLocaleTimeString('nl-BE', {hour:'2-digit', minute:'2-digit'});
@@ -2535,7 +2701,11 @@ function renderHistory() {
         ? t.screenshots.filter(s => s).length
         : (t.screenshot ? 1 : 0);
       const ssLabel = screenshotCount > 0 ? `📷${screenshotCount > 1 ? ' ×' + screenshotCount : ''} ` : '';
-      const detailBtn = `<button class="secondary" style="padding:4px 8px; font-size:11px;" onclick="showTradeScreenshot('${t.id}')">${ssLabel}Bekijk</button>`;
+      const actionBtns = `<div style="display:flex; gap:4px; flex-wrap:wrap;">
+        <button class="secondary" style="padding:4px 8px; font-size:11px;" onclick="showTradeScreenshot('${t.id}')" title="Bekijk details">${ssLabel}Bekijk</button>
+        <button class="secondary" style="padding:4px 8px; font-size:11px;" onclick="editTrade('${t.id}')" title="Bewerken">✏️</button>
+        <button class="danger" style="padding:4px 8px; font-size:11px;" onclick="deleteTrade('${t.id}')" title="Verwijderen">🗑️</button>
+      </div>`;
       html += `<tr>
         <td>${d.toLocaleDateString('nl-BE')}</td>
         <td>${entryTime}</td>
@@ -2547,7 +2717,7 @@ function renderHistory() {
         <td class="${t.pnl>=0?'pnl-positive':'pnl-negative'}">€${t.pnl.toFixed(2)}</td>
         <td>${t.planFollowed}</td>
         <td>${t.checklistScore || '-'}</td>
-        <td>${detailBtn}</td>
+        <td>${actionBtns}</td>
       </tr>`;
     });
     html += '</tbody></table>';
@@ -2705,7 +2875,7 @@ function renderInsights() {
   html += renderEvaluationBreakdown('timeframe', 'Timeframe entry', filtered);
   html += renderEvaluationBreakdown('hammer', 'Hammercandle aanwezig', filtered);
   html += renderEvaluationBreakdown('stoppedOut', 'Indien uitgetikt', filtered);
-  html += renderEvaluationBreakdown('ema', '9 EMA invloed', filtered);
+  html += renderEvaluationBreakdown('manualClose', 'Indien gevoelsmatig afgesloten', filtered);
   html += renderEvaluationBreakdown('vwap', 'VWAP invloed', filtered);
   html += renderEvaluationBreakdown('exit', 'Exit strategie', filtered);
   html += renderEvaluationBreakdown('atr', 'ATR invloed', filtered);
@@ -2957,6 +3127,18 @@ function renderPatterns(trades) {
     patterns.push(`📐 Van alle uitgetikte trades: <strong>${pct}%</strong> liep daarna alsnog jouw richting op. Als dit boven 40% zit, ligt het probleem in je stop-loss plaatsing.`);
   }
   
+  // Pattern: manual close where trade went on without you
+  const manualWentAfter = data_set.filter(t => t.evaluation && t.evaluation.manualClose === 'manual_went_after');
+  const manualNeverWorked = data_set.filter(t => t.evaluation && t.evaluation.manualClose === 'manual_never_worked');
+  if (manualWentAfter.length >= 2) {
+    patterns.push(`😤 <strong>${manualWentAfter.length}x gevoelsmatig te vroeg gesloten — de trade vertrok daarna alsnog.</strong> Dit is gemiste winst door ongeduld of angst. Hou je aan je target/plan.`);
+  }
+  if (manualWentAfter.length >= 2 && manualNeverWorked.length >= 2) {
+    const total = manualWentAfter.length + manualNeverWorked.length;
+    const pct = (manualWentAfter.length / total * 100).toFixed(0);
+    patterns.push(`📐 Van je gevoelsmatige sluitingen was <strong>${pct}%</strong> te vroeg (vertrok daarna alsnog). Als dit hoog is, sluit je uit emotie i.p.v. op basis van je plan.`);
+  }
+  
   // Pattern: manual exits (gevoelsmatig gesloten)
   const manualExits = data_set.filter(t => t.evaluation && t.evaluation.exit === 'manual_exit');
   if (manualExits.length >= 3) {
@@ -3180,23 +3362,32 @@ function showToast(msg, isError = false) {
   setTimeout(() => t.className = 'toast' + (isError ? ' error' : ''), 3000);
 }
 
+function switchToPanel(panelName) {
+  document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  const btn = document.querySelector(`nav button[data-panel="${panelName}"]`);
+  if (btn) btn.classList.add('active');
+  const panel = document.getElementById('panel-' + panelName);
+  if (panel) panel.classList.add('active');
+  
+  // Render content for the panel
+  if (panelName === 'pretrade') renderPreTradeCheck();
+  if (panelName === 'strategies') renderStrategies();
+  if (panelName === 'trades') { updateTradeWarning(); renderTodayTrades(); }
+  if (panelName === 'history') renderHistory();
+  if (panelName === 'insights') renderInsights();
+  if (panelName === 'dayreview') { renderDayStats(); updateDayReviewSavedInfo(); }
+  if (panelName === 'settings') loadSettings();
+}
+
 function setupNavigation() {
   document.querySelectorAll('nav button').forEach(btn => {
     btn.addEventListener('click', () => {
-      document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
-      document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
-      btn.classList.add('active');
-      const panel = document.getElementById('panel-' + btn.dataset.panel);
-      panel.classList.add('active');
-      
-      // Render content for the panel
-      if (btn.dataset.panel === 'pretrade') renderPreTradeCheck();
-      if (btn.dataset.panel === 'strategies') renderStrategies();
-      if (btn.dataset.panel === 'trades') { updateTradeWarning(); renderTodayTrades(); }
-      if (btn.dataset.panel === 'history') renderHistory();
-      if (btn.dataset.panel === 'insights') renderInsights();
-      if (btn.dataset.panel === 'dayreview') { renderDayStats(); updateDayReviewSavedInfo(); }
-      if (btn.dataset.panel === 'settings') loadSettings();
+      // If leaving trade logging while editing, cancel edit mode
+      if (editingTradeId && btn.dataset.panel !== 'trades') {
+        cancelEditMode();
+      }
+      switchToPanel(btn.dataset.panel);
     });
   });
 }
