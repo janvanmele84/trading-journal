@@ -843,6 +843,11 @@
       <div style="margin-bottom:16px;"></div>
       
       <button class="primary" onclick="saveTrade()">Trade opslaan</button>
+      
+      <div id="editDeleteZone" style="display:none; margin-top:24px; padding-top:20px; border-top:1px solid #334155;">
+        <div style="font-size:13px; color:#94a3b8; margin-bottom:10px;">Wil je deze trade liever verwijderen?</div>
+        <button class="secondary" onclick="deleteCurrentEditingTrade()" style="font-size:13px; color:#f87171; border:1px solid #7c2d12;">🗑️ Deze trade verwijderen</button>
+      </div>
     </div>
     
     <div class="card">
@@ -2094,7 +2099,6 @@ function showTradeScreenshot(tradeId) {
   if (actionsEl) {
     actionsEl.innerHTML = `
       <button class="secondary" onclick="closeScreenshotViewer(); editTrade('${trade.id}')">✏️ Bewerken</button>
-      <button class="danger" style="padding:8px 16px;" onclick="deleteTrade('${trade.id}')">🗑️ Verwijderen</button>
     `;
   }
   
@@ -2486,14 +2490,31 @@ function showEditBanner(trade) {
   banner.innerHTML = `<span>✏️ Je bewerkt een bestaande trade (${trade.instrument}, ${d.toLocaleDateString('nl-BE')}). Klik "Trade opslaan" om de wijzigingen te bewaren.</span>
     <button onclick="cancelEditMode()" style="background:rgba(255,255,255,0.2); border:none; color:white; padding:6px 12px; border-radius:6px; cursor:pointer; font-size:13px; white-space:nowrap; margin-left:12px;">Annuleren</button>`;
   banner.style.display = 'flex';
+  // Show the delete zone at the bottom of the form
+  const deleteZone = document.getElementById('editDeleteZone');
+  if (deleteZone) deleteZone.style.display = 'block';
 }
 
 function cancelEditMode() {
   editingTradeId = null;
   const banner = document.getElementById('editModeBanner');
   if (banner) banner.style.display = 'none';
+  const deleteZone = document.getElementById('editDeleteZone');
+  if (deleteZone) deleteZone.style.display = 'none';
   clearTradeForm();
   currentPreTradeCheck = {};
+}
+
+async function deleteCurrentEditingTrade() {
+  if (!editingTradeId) return;
+  const id = editingTradeId;
+  await deleteTrade(id);
+  // If deletion succeeded, the trade is gone from state
+  if (!state.trades.find(t => t.id === id)) {
+    cancelEditMode();
+    switchToPanel('history');
+    renderHistory();
+  }
 }
 
 async function deleteTrade(tradeId) {
@@ -2704,7 +2725,6 @@ function renderHistory() {
       const actionBtns = `<div style="display:flex; gap:4px; flex-wrap:wrap;">
         <button class="secondary" style="padding:4px 8px; font-size:11px;" onclick="showTradeScreenshot('${t.id}')" title="Bekijk details">${ssLabel}Bekijk</button>
         <button class="secondary" style="padding:4px 8px; font-size:11px;" onclick="editTrade('${t.id}')" title="Bewerken">✏️</button>
-        <button class="danger" style="padding:4px 8px; font-size:11px;" onclick="deleteTrade('${t.id}')" title="Verwijderen">🗑️</button>
       </div>`;
       html += `<tr>
         <td>${d.toLocaleDateString('nl-BE')}</td>
