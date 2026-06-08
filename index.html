@@ -1464,6 +1464,25 @@ function getBreakevenThreshold() {
     : 5;
 }
 
+// Calculate the trade outcome in POINTS (entry vs exit prijs), with sign based on direction.
+// Returns null if entry/exit not both filled — those trades are excluded from edge metrics.
+function getPoints(trade) {
+  if (!trade) return null;
+  const entry = parseFloat(trade.entry);
+  const exit = parseFloat(trade.exit);
+  if (!isFinite(entry) || !isFinite(exit)) return null;
+  // Long: profit when exit > entry. Short: profit when exit < entry.
+  if (trade.direction === 'short') {
+    return entry - exit;
+  }
+  return exit - entry;
+}
+
+// Returns true if trade has usable points data (entry + exit both set)
+function hasPoints(trade) {
+  return getPoints(trade) !== null;
+}
+
 function isWin(trade) {
   return trade.pnl > getBreakevenThreshold();
 }
@@ -2819,24 +2838,36 @@ function renderInsights() {
     return;
   }
   
-  // Overall stats (now using filtered + breakeven classification)
-  const totalPnL = filtered.reduce((s, t) => s + t.pnl, 0);
+  // Trades with usable points data (entry + exit both set) — used ONLY for Profit Factor
+  const tradesWithPoints = filtered.filter(t => hasPoints(t));
   const wins = filtered.filter(t => isWin(t));
   const losses = filtered.filter(t => isLoss(t));
   const breakevens = filtered.filter(t => isBreakeven(t));
-  const decisive = wins.length + losses.length; // BE excluded from win rate calculation
+  const decisive = wins.length + losses.length; // BE excluded from win rate
   const winRate = decisive > 0 ? wins.length / decisive * 100 : 0;
+  
+  // Most metrics use € P&L
+  const totalPnL = filtered.reduce((s, t) => s + t.pnl, 0);
   const avgWin = wins.length > 0 ? wins.reduce((s, t) => s + t.pnl, 0) / wins.length : 0;
   const avgLoss = losses.length > 0 ? losses.reduce((s, t) => s + t.pnl, 0) / losses.length : 0;
   const expectancy = decisive > 0 ? (winRate/100 * avgWin) + ((1 - winRate/100) * avgLoss) : 0;
-  const profitFactor = losses.length > 0 ? Math.abs(wins.reduce((s,t)=>s+t.pnl,0) / losses.reduce((s,t)=>s+t.pnl,0)) : 0;
+  
+  // Profit Factor uses POINTS (entry vs exit) so sizing errors don't pollute it
+  const winsWithPoints = wins.filter(t => hasPoints(t));
+  const lossesWithPoints = losses.filter(t => hasPoints(t));
+  const totalWinPts = winsWithPoints.reduce((s, t) => s + getPoints(t), 0);
+  const totalLossPts = lossesWithPoints.reduce((s, t) => s + getPoints(t), 0);
+  const profitFactor = totalLossPts !== 0 ? Math.abs(totalWinPts / totalLossPts) : 0;
+  const pfMissing = (wins.length - winsWithPoints.length) + (losses.length - lossesWithPoints.length);
+  const pfNote = pfMissing > 0 ? `Op punten (${pfMissing} trade(s) zonder exit niet meegerekend)` : 'Op punten — niet beïnvloed door positiegrootte';
+  
   const beThreshold = getBreakevenThreshold();
   
   let html = filterHtml + `<div class="insight-grid">
     <div class="insight-card">
       <h4>Totale P&L</h4>
       <div class="insight-value ${totalPnL>=0?'pnl-positive':'pnl-negative'}">€${totalPnL.toFixed(2)}</div>
-      <div class="insight-detail">Over ${filtered.length} trades (BE drempel: ±€${beThreshold})</div>
+      <div class="insight-detail">Over ${filtered.length} trades · BE drempel: ±€${beThreshold}</div>
     </div>
     <div class="insight-card">
       <h4>Win Rate</h4>
@@ -2851,7 +2882,7 @@ function renderInsights() {
     <div class="insight-card">
       <h4>Profit Factor</h4>
       <div class="insight-value">${profitFactor.toFixed(2)}</div>
-      <div class="insight-detail">Boven 1.5 = goed, boven 2 = uitstekend</div>
+      <div class="insight-detail">${pfNote}. Boven 1.5 = goed, boven 2 = uitstekend</div>
     </div>
     <div class="insight-card">
       <h4>Avg Win / Avg Loss</h4>
@@ -2948,7 +2979,6 @@ function renderDurationBreakdown(trades) {
     else buckets[bucket].breakevens++;
   });
   
-  // Filter empty buckets
   const filledBuckets = Object.entries(buckets).filter(([, d]) => d.trades.length > 0);
   if (filledBuckets.length === 0) {
     return '<div style="color:#64748b; font-size:13px; margin-bottom:14px; padding:8px;">Geen duur-data beschikbaar.</div>';
@@ -3215,7 +3245,7 @@ function renderPatterns(trades) {
     if (!byInstrument[t.instrument]) byInstrument[t.instrument] = { pnl: 0, count: 0 };
     byInstrument[t.instrument].pnl += t.pnl;
     byInstrument[t.instrument].count++;
-  });
+    });
   const bestInst = Object.entries(byInstrument).sort((a,b) => (b[1].pnl/b[1].count) - (a[1].pnl/a[1].count))[0];
   const worstInst = Object.entries(byInstrument).sort((a,b) => (a[1].pnl/a[1].count) - (b[1].pnl/b[1].count))[0];
   if (bestInst && bestInst[1].count >= 3) {
