@@ -621,7 +621,7 @@
             <option value="">-- Kies setup --</option>
             <option value="break-retest">Break & Retest</option>
             <option value="reversal">Reversal</option>
-            <option value="vwap-bounce">VWAP Bounce</option>
+            <option value="in-range">In Range</option>
             <option value="orb">Opening Range Breakout</option>
             <option value="hod-lod-breakout">HOD/LOD Breakout</option>
           </select>
@@ -748,6 +748,13 @@
             <option value="manual_exit">Handmatig gesloten</option>
             <option value="stopped_out">Stoploss geraakt</option>
           </select>
+        </div>
+        <div class="form-group" style="background:#1e293b; padding:12px; border-radius:8px; border-left:3px solid #60a5fa;">
+          <label style="display:flex; align-items:center; gap:10px; cursor:pointer; margin-bottom:0;">
+            <input type="checkbox" id="evalTouched2R" style="width:18px; height:18px; cursor:pointer;">
+            <span style="font-weight:600;">Trade heeft 2R aangeraakt tijdens het verloop</span>
+          </label>
+          <div style="font-size:11px; color:#94a3b8; margin-top:6px; margin-left:28px;">Vink aan als de prijs op enig moment het 2R-niveau heeft bereikt. Dit is essentieel voor de "2R pakken of laten lopen?" analyse in Inzichten.</div>
         </div>
         <div class="form-group">
           <label>ATR invloed?</label>
@@ -1058,41 +1065,41 @@ const STRATEGY_CHECKLISTS = {
       }
     ]
   },
-  'vwap-bounce': {
-    name: 'VWAP Bounce',
-    description: 'Prijs trekt terug naar VWAP en stuitert af in richting van de trend.',
+  'in-range': {
+    name: 'In Range',
+    description: 'Markt beweegt in een duidelijke range (sideways). Tradeer van rand naar rand: koop bij range-bodem, verkoop bij range-top.',
     sections: [
       {
         title: 'Context',
         critical: true,
         items: [
-          'Trending markt (geen choppy range)',
-          'Daily trend duidelijk',
-          'Prijs heeft VWAP eerder vandaag gerespecteerd',
-          'Indexen in dezelfde richting',
-          'Geen high-impact nieuws komend'
+          'Markt is sideways, geen sterke trend',
+          'Range duidelijk gedefinieerd (minstens 2-3 raakpunten boven en onder)',
+          'Range breed genoeg voor minstens 2R (top - bodem ÷ 3)',
+          'Geen high-impact nieuws komend dat range kan breken',
+          'Indexen ook in range / geen sterke directionele druk'
         ]
       },
       {
-        title: 'VWAP Setup',
+        title: 'Entry Setup',
         critical: true,
         items: [
-          'Prijs trekt terug richting VWAP (pullback)',
-          'VWAP fungeert als dynamische support/resistance',
-          'Niet recht door VWAP gebroken (anders is het geen bounce)',
-          'Pullback ~50% van laatste impulsbeweging',
-          'Confluentie: VWAP + level / 9EMA / Fib 50%'
+          'Prijs raakt range-rand (top voor short, bodem voor long)',
+          'Reactie zichtbaar: rejection wick / pin bar / hammer',
+          'Volume neemt af op approach van rand',
+          'Geen breakout-volume (zou range-break signaleren)',
+          'Confirmatiecandle in tegengestelde richting'
         ]
       },
       {
-        title: 'Entry & Confirmatie',
+        title: 'Risk Management',
         critical: true,
         items: [
-          'Bevestigingscandle (hammer/pin bar) op 3-5min TF bij VWAP',
-          'Volume neemt af bij pullback, stijgt bij bounce',
-          'Entry boven/onder bevestigingscandle',
-          'SL net voorbij VWAP (op 3min TF)',
-          'R/R minimum 1:2 naar volgend level'
+          'SL net voorbij range-rand (5-10 punten buffer)',
+          'TP eerste = midden van range (1R-1.5R)',
+          'TP tweede = tegenoverliggende rand (2R+)',
+          'Sluit positie als prijs door range-rand breekt',
+          'Geen positie houden als range-break dreigt op nieuws'
         ]
       }
     ]
@@ -1400,6 +1407,13 @@ const today = () => new Date().toISOString().split('T')[0];
 // ==================== LABEL TRANSLATIONS ====================
 // Map technical codes to human-readable labels for display in insights
 const LABEL_TRANSLATIONS = {
+  // Setup types
+  'break-retest': 'Break & Retest',
+  'reversal': 'Reversal',
+  'in-range': 'In Range',
+  'vwap-bounce': 'VWAP Bounce',
+  'orb': 'Opening Range Breakout',
+  'hod-lod-breakout': 'HOD/LOD Breakout',
   // Improvement reasons
   'setup_correct': 'Setup was correct',
   'entry_too_early': 'Entry te vroeg',
@@ -1456,6 +1470,32 @@ const LABEL_TRANSLATIONS = {
 function translateLabel(value) {
   if (!value && value !== 0) return value;
   return LABEL_TRANSLATIONS[value] !== undefined ? LABEL_TRANSLATIONS[value] : value;
+}
+
+// Calculate R-multiple: how many R did this trade make?
+// R = risk per share = |entry - stop|. Result is in R-units.
+// Long: profit/risk where profit = exit - entry, risk = entry - stop
+// Short: profit = entry - exit, risk = stop - entry
+function getRMultiple(trade) {
+  if (!trade) return null;
+  const entry = parseFloat(trade.entry);
+  const exit = parseFloat(trade.exit);
+  const stop = parseFloat(trade.stop);
+  if (!isFinite(entry) || !isFinite(exit) || !isFinite(stop)) return null;
+  const risk = Math.abs(entry - stop);
+  if (risk === 0) return null;
+  let profit;
+  if (trade.direction === 'short') {
+    profit = entry - exit;
+  } else {
+    profit = exit - entry;
+  }
+  return profit / risk;
+}
+
+// Did this trade hit 2R during its lifetime? Uses the touched2R flag the user logged.
+function touched2R(trade) {
+  return trade && trade.touched2R === true;
 }
 
 function getBreakevenThreshold() {
@@ -2097,6 +2137,10 @@ function showTradeScreenshot(tradeId) {
     addRow('Duur', formatDuration(trade.durationMinutes));
   }
   if (trade.planFollowed) addRow('Plan gevolgd', trade.planFollowed);
+  // R-multiple and touched2R
+  const tradeR = getRMultiple(trade);
+  if (tradeR !== null) addRow('Resultaat (R)', `${tradeR>=0?'+':''}${tradeR.toFixed(2)}R`);
+  if (trade.touched2R) addRow('2R aangeraakt', 'Ja');
   
   // Trade analyse velden (niet afleidbaar uit screenshot)
   const ev = trade.evaluation || {};
@@ -2339,6 +2383,7 @@ async function saveTrade() {
     setup: document.getElementById('tradeSetup').value,
     planFollowed: document.getElementById('tradePlanFollowed').value,
     improvement: document.getElementById('tradeImprovement').value,
+    touched2R: document.getElementById('evalTouched2R').checked,
     evaluation: {
       dailyTrend: document.getElementById('evalDailyTrend').value,
       level: document.getElementById('evalLevel').value,
@@ -2456,6 +2501,7 @@ function editTrade(tradeId) {
   setVal('evalManualClose', ev.manualClose);
   setVal('evalVwap', ev.vwap);
   setVal('evalExit', ev.exit);
+  document.getElementById('evalTouched2R').checked = trade.touched2R === true;
   setVal('evalAtr', ev.atr);
   setVal('evalMentorFollowed', ev.mentorFollowed);
   setVal('evalMentorName', ev.mentorName);
@@ -2572,6 +2618,9 @@ function clearTradeForm() {
     const el = document.getElementById(id);
     if (el) el.value = '';
   });
+  // Reset touched2R checkbox
+  const touched2R = document.getElementById('evalTouched2R');
+  if (touched2R) touched2R.checked = false;
   // Hide custom instrument input and mentor field
   const customInput = document.getElementById('tradeInstrumentCustom');
   if (customInput) customInput.style.display = 'none';
@@ -2728,7 +2777,7 @@ function renderHistory() {
   if (state.trades.length === 0) {
     allEl.innerHTML = '<div class="empty-state">Nog geen trades.</div>';
   } else {
-    let html = '<table><thead><tr><th>Datum</th><th>Entry</th><th>Exit</th><th>Duur</th><th>Instrument</th><th>Richting</th><th>Setup</th><th>P&L</th><th>Plan?</th><th>Score</th><th>Acties</th></tr></thead><tbody>';
+    let html = '<table><thead><tr><th>Datum</th><th>Entry</th><th>Exit</th><th>Duur</th><th>Instrument</th><th>Richting</th><th>Setup</th><th>P&L</th><th>R</th><th>2R advies</th><th>Plan?</th><th>Score</th><th>Acties</th></tr></thead><tbody>';
     state.trades.forEach(t => {
       const d = new Date(t.timestamp);
       const entryTime = t.exactTime || d.toLocaleTimeString('nl-BE', {hour:'2-digit', minute:'2-digit'});
@@ -2736,6 +2785,23 @@ function renderHistory() {
       const duration = t.durationMinutes !== null && t.durationMinutes !== undefined 
         ? formatDuration(t.durationMinutes) 
         : '-';
+      // R-multiple
+      const r = getRMultiple(t);
+      const rCell = r !== null 
+        ? `<span class="${r>0?'pnl-positive':r<0?'pnl-negative':''}">${r>=0?'+':''}${r.toFixed(2)}R</span>`
+        : '<span style="color:#64748b;">—</span>';
+      // 2R advice column: only meaningful if trade touched 2R and was NOT secured at 2R
+      let adviceCell = '<span style="color:#475569;">—</span>';
+      if (touched2R(t)) {
+        const exitStrat = t.evaluation && t.evaluation.exit;
+        if (exitStrat === '2R_secured') {
+          adviceCell = '<span style="color:#60a5fa; font-size:11px;">2R gepakt ✓</span>';
+        } else if (r !== null) {
+          if (r > 2.1) adviceCell = '<span style="color:#10b981; font-size:11px;">✓ Laten lopen</span>';
+          else if (r < 1.9) adviceCell = '<span style="color:#ef4444; font-size:11px;">✗ Had beter 2R gepakt</span>';
+          else adviceCell = '<span style="color:#f59e0b; font-size:11px;">≈ Gelijk uit</span>';
+        }
+      }
       // Count screenshots
       const screenshotCount = Array.isArray(t.screenshots) && t.screenshots.length > 0
         ? t.screenshots.filter(s => s).length
@@ -2754,6 +2820,8 @@ function renderHistory() {
         <td>${t.direction}</td>
         <td>${t.setup || '-'}</td>
         <td class="${t.pnl>=0?'pnl-positive':'pnl-negative'}">€${t.pnl.toFixed(2)}</td>
+        <td>${rCell}</td>
+        <td>${adviceCell}</td>
         <td>${t.planFollowed}</td>
         <td>${t.checklistScore || '-'}</td>
         <td>${actionBtns}</td>
@@ -2803,10 +2871,173 @@ function renderHistory() {
 
 // ==================== INSIGHTS ====================
 let insightsFilterInstrument = 'all';
+let insightsFilterPeriod = 'all'; // 'all', 'today', 'week', 'month'
 
 function setInsightsFilter(value) {
   insightsFilterInstrument = value;
   renderInsights();
+}
+
+function setInsightsPeriod(value) {
+  insightsFilterPeriod = value;
+  renderInsights();
+}
+
+// Filter trades by selected period
+function filterByPeriod(trades, period) {
+  if (period === 'all') return trades;
+  const now = new Date();
+  const todayStr = now.toISOString().split('T')[0];
+  
+  if (period === 'today') {
+    return trades.filter(t => t.date === todayStr);
+  }
+  if (period === 'week') {
+    // Last 7 days (rolling)
+    const weekAgo = new Date(now);
+    weekAgo.setDate(weekAgo.getDate() - 7);
+    const weekAgoStr = weekAgo.toISOString().split('T')[0];
+    return trades.filter(t => t.date >= weekAgoStr);
+  }
+  if (period === 'month') {
+    // Last 30 days (rolling)
+    const monthAgo = new Date(now);
+    monthAgo.setDate(monthAgo.getDate() - 30);
+    const monthAgoStr = monthAgo.toISOString().split('T')[0];
+    return trades.filter(t => t.date >= monthAgoStr);
+  }
+  return trades;
+}
+
+// ====== 2R PAKKEN OF LATEN LOPEN? Analyse ======
+function render2RAnalysis(trades) {
+  // Only consider trades that touched 2R
+  const touched = trades.filter(t => touched2R(t));
+  
+  if (touched.length < 3) {
+    return `<div class="card" style="background:#0f172a; margin-top:20px;">
+      <h3 style="margin-top:0;">🎯 2R pakken of laten lopen?</h3>
+      <div style="color:#94a3b8; font-size:14px;">
+        Nog niet genoeg data. Vink "Trade heeft 2R aangeraakt" aan bij minstens 3 trades die het 2R-niveau hebben bereikt, om deze analyse te zien.
+      </div>
+      <div style="color:#64748b; font-size:13px; margin-top:8px;">
+        Status: ${touched.length} trade(s) met 2R aangeraakt.
+      </div>
+    </div>`;
+  }
+  
+  // Split into two strategies:
+  // A) Vroeg gepakt: exit === '2R_secured' → known +2R outcome
+  // B) Laten lopen: exit !== '2R_secured' (trailed/manual/stopped) → R-multiple from data
+  const securedAt2R = touched.filter(t => t.evaluation && t.evaluation.exit === '2R_secured');
+  const letRun = touched.filter(t => t.evaluation && t.evaluation.exit !== '2R_secured');
+  
+  // For "secured": every trade is exactly +2R (by definition, they hit 2R and were closed there)
+  const securedCount = securedAt2R.length;
+  const securedAvgR = securedCount > 0 ? 2.0 : null; // by definition
+  
+  // For "let run": calculate actual R-multiple per trade
+  const letRunWithR = letRun.map(t => ({ trade: t, r: getRMultiple(t) })).filter(x => x.r !== null);
+  const letRunCount = letRunWithR.length;
+  const letRunAvgR = letRunCount > 0 ? letRunWithR.reduce((s,x) => s+x.r, 0) / letRunCount : null;
+  
+  // Distribution buckets for "let run"
+  const buckets = {
+    'Onder 1R': 0,       // r < 1
+    '1R - 1.5R': 0,      // 1 <= r < 1.5
+    '1.5R - 2R': 0,      // 1.5 <= r < 2
+    'Exact 2R': 0,       // r ≈ 2 (within 0.1)
+    'Boven 2R': 0        // r > 2.1
+  };
+  letRunWithR.forEach(({r}) => {
+    if (r < 1) buckets['Onder 1R']++;
+    else if (r < 1.5) buckets['1R - 1.5R']++;
+    else if (r < 1.9) buckets['1.5R - 2R']++;
+    else if (r <= 2.1) buckets['Exact 2R']++;
+    else buckets['Boven 2R']++;
+  });
+  
+  // How many would have been better off taking 2R?
+  // i.e., how many "let run" trades ended up below 2R?
+  const belowTarget = letRunWithR.filter(({r}) => r < 1.9).length;
+  const aboveTarget = letRunWithR.filter(({r}) => r > 2.1).length;
+  const atTarget = letRunCount - belowTarget - aboveTarget;
+  
+  // Verdict
+  let verdict = '';
+  let verdictColor = '#94a3b8';
+  if (letRunAvgR !== null) {
+    if (letRunAvgR > 2.2) {
+      verdict = `✅ <strong>Laten lopen was beter</strong> — gemiddeld ${letRunAvgR.toFixed(2)}R per trade (vs zekere 2R). Je laten-lopen aanpak werkt.`;
+      verdictColor = '#10b981';
+    } else if (letRunAvgR < 1.8) {
+      verdict = `❌ <strong>2R direct pakken was beter geweest</strong> — laten lopen gaf gemiddeld maar ${letRunAvgR.toFixed(2)}R, terwijl 2R pakken zekere 2R zou zijn geweest. Verlies door pullbacks weegt zwaarder dan winst door doorlopen.`;
+      verdictColor = '#ef4444';
+    } else {
+      verdict = `⚖️ <strong>Vergelijkbaar</strong> — laten lopen gaf gemiddeld ${letRunAvgR.toFixed(2)}R. Nauwelijks verschil met direct 2R pakken. Andere factoren (stress, beschikbare tijd) kunnen de doorslag geven.`;
+      verdictColor = '#f59e0b';
+    }
+  }
+  
+  // Build bar chart for buckets
+  const maxCount = Math.max(...Object.values(buckets), 1);
+  let bucketHtml = '';
+  for (const [label, count] of Object.entries(buckets)) {
+    if (count === 0 && letRunCount > 0) {
+      bucketHtml += `<div style="display:flex; align-items:center; margin-bottom:6px; font-size:12px;">
+        <div style="width:90px; color:#64748b;">${label}</div>
+        <div style="flex:1; height:18px; background:#1e293b; border-radius:4px;"></div>
+        <div style="width:30px; text-align:right; color:#64748b;">0</div>
+      </div>`;
+      continue;
+    }
+    const pct = (count / maxCount) * 100;
+    const color = label === 'Onder 1R' ? '#ef4444' 
+                : label === '1R - 1.5R' ? '#f87171'
+                : label === '1.5R - 2R' ? '#fbbf24'
+                : label === 'Exact 2R' ? '#60a5fa'
+                : '#10b981';
+    bucketHtml += `<div style="display:flex; align-items:center; margin-bottom:6px; font-size:12px;">
+      <div style="width:90px; color:#cbd5e1;">${label}</div>
+      <div style="flex:1; height:18px; background:#1e293b; border-radius:4px; position:relative;">
+        <div style="position:absolute; left:0; top:0; height:100%; width:${pct}%; background:${color}; border-radius:4px;"></div>
+      </div>
+      <div style="width:30px; text-align:right; color:#cbd5e1;">${count}</div>
+    </div>`;
+  }
+  
+  return `<div class="card" style="background:linear-gradient(135deg, #0f172a, #1e293b); border:1px solid #334155; margin-top:20px;">
+    <h3 style="margin-top:0; display:flex; align-items:center; gap:8px;">🎯 2R pakken of laten lopen?</h3>
+    <div style="color:#94a3b8; font-size:13px; margin-bottom:16px;">
+      Analyse over ${touched.length} trades die het 2R-niveau hebben aangeraakt.
+    </div>
+    
+    <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); gap:12px; margin-bottom:20px;">
+      <div style="background:#0f172a; padding:14px; border-radius:8px; border-left:3px solid #60a5fa;">
+        <div style="font-size:11px; color:#94a3b8; text-transform:uppercase; letter-spacing:0.5px;">Direct 2R gepakt</div>
+        <div style="font-size:24px; font-weight:700; color:#60a5fa; margin:4px 0;">+2.00R</div>
+        <div style="font-size:12px; color:#94a3b8;">${securedCount} trade(s) · per definitie</div>
+      </div>
+      <div style="background:#0f172a; padding:14px; border-radius:8px; border-left:3px solid ${letRunAvgR !== null && letRunAvgR >= 2 ? '#10b981' : '#ef4444'};">
+        <div style="font-size:11px; color:#94a3b8; text-transform:uppercase; letter-spacing:0.5px;">Laten lopen</div>
+        <div style="font-size:24px; font-weight:700; color:${letRunAvgR !== null && letRunAvgR >= 2 ? '#10b981' : '#ef4444'}; margin:4px 0;">${letRunAvgR !== null ? (letRunAvgR >= 0 ? '+' : '') + letRunAvgR.toFixed(2) + 'R' : '— R'}</div>
+        <div style="font-size:12px; color:#94a3b8;">${letRunCount} trade(s) · gemiddeld behaald</div>
+      </div>
+      <div style="background:#0f172a; padding:14px; border-radius:8px; border-left:3px solid #f59e0b;">
+        <div style="font-size:11px; color:#94a3b8; text-transform:uppercase; letter-spacing:0.5px;">Onder 2R uitgekomen</div>
+        <div style="font-size:24px; font-weight:700; color:#f59e0b; margin:4px 0;">${letRunCount > 0 ? Math.round(belowTarget/letRunCount*100) : 0}%</div>
+        <div style="font-size:12px; color:#94a3b8;">${belowTarget} van ${letRunCount} let-run trades</div>
+      </div>
+    </div>
+    
+    ${verdict ? `<div style="background:rgba(${verdictColor === '#10b981' ? '16,185,129' : verdictColor === '#ef4444' ? '239,68,68' : '245,158,11'},0.1); border-left:3px solid ${verdictColor}; padding:12px 14px; border-radius:6px; margin-bottom:16px; color:#e2e8f0; font-size:14px; line-height:1.5;">${verdict}</div>` : ''}
+    
+    ${letRunCount > 0 ? `
+    <div style="background:#0f172a; padding:14px; border-radius:8px;">
+      <div style="font-size:13px; color:#cbd5e1; margin-bottom:10px; font-weight:600;">Verdeling van "laten lopen" uitkomsten:</div>
+      ${bucketHtml}
+    </div>` : ''}
+  </div>`;
 }
 
 function renderInsights() {
@@ -2817,24 +3048,46 @@ function renderInsights() {
     return;
   }
   
-  // Build instrument filter
+  // Build filters
   const instruments = [...new Set(state.trades.map(t => t.instrument))].sort();
-  let filterHtml = '<div style="margin-bottom:20px;"><label style="font-size:13px; color:#94a3b8; margin-right:12px;">Filter op instrument:</label>';
+  
+  let filterHtml = '<div style="margin-bottom:20px; display:flex; gap:12px; flex-wrap:wrap; align-items:center;">';
+  
+  // Period filter
+  filterHtml += '<div style="display:flex; align-items:center; gap:8px;">';
+  filterHtml += '<label style="font-size:13px; color:#94a3b8;">Periode:</label>';
+  filterHtml += `<select onchange="setInsightsPeriod(this.value)" style="background:#0f172a; border:1px solid #334155; color:#e2e8f0; padding:8px 12px; border-radius:6px;">`;
+  const periodLabels = {
+    'all': 'Alle tijd',
+    'today': 'Vandaag',
+    'week': 'Laatste 7 dagen',
+    'month': 'Laatste 30 dagen'
+  };
+  for (const [val, label] of Object.entries(periodLabels)) {
+    filterHtml += `<option value="${val}" ${insightsFilterPeriod===val?'selected':''}>${label}</option>`;
+  }
+  filterHtml += '</select></div>';
+  
+  // Instrument filter (counts based on period-filtered set)
+  const periodFiltered = filterByPeriod(state.trades, insightsFilterPeriod);
+  filterHtml += '<div style="display:flex; align-items:center; gap:8px;">';
+  filterHtml += '<label style="font-size:13px; color:#94a3b8;">Instrument:</label>';
   filterHtml += `<select onchange="setInsightsFilter(this.value)" style="background:#0f172a; border:1px solid #334155; color:#e2e8f0; padding:8px 12px; border-radius:6px;">`;
-  filterHtml += `<option value="all" ${insightsFilterInstrument==='all'?'selected':''}>Alle instrumenten (${state.trades.length})</option>`;
+  filterHtml += `<option value="all" ${insightsFilterInstrument==='all'?'selected':''}>Alle instrumenten (${periodFiltered.length})</option>`;
   instruments.forEach(inst => {
-    const count = state.trades.filter(t => t.instrument === inst).length;
+    const count = periodFiltered.filter(t => t.instrument === inst).length;
     filterHtml += `<option value="${inst}" ${insightsFilterInstrument===inst?'selected':''}>${inst} (${count})</option>`;
   });
   filterHtml += '</select></div>';
+  filterHtml += '</div>';
   
-  // Filtered trade set
+  // Apply both filters: period first, then instrument
   const filtered = insightsFilterInstrument === 'all' 
-    ? state.trades 
-    : state.trades.filter(t => t.instrument === insightsFilterInstrument);
+    ? periodFiltered 
+    : periodFiltered.filter(t => t.instrument === insightsFilterInstrument);
   
   if (filtered.length < 3) {
-    el.innerHTML = filterHtml + '<div class="empty-state">Minstens 3 trades nodig op dit instrument.</div>';
+    el.innerHTML = filterHtml + `<div class="empty-state">Minstens 3 trades nodig${insightsFilterPeriod !== 'all' ? ' in deze periode' : ''}${insightsFilterInstrument !== 'all' ? ' op dit instrument' : ''} (huidig: ${filtered.length}).</div>`;
     return;
   }
   
@@ -2852,14 +3105,26 @@ function renderInsights() {
   const avgLoss = losses.length > 0 ? losses.reduce((s, t) => s + t.pnl, 0) / losses.length : 0;
   const expectancy = decisive > 0 ? (winRate/100 * avgWin) + ((1 - winRate/100) * avgLoss) : 0;
   
-  // Profit Factor uses POINTS (entry vs exit) so sizing errors don't pollute it
-  const winsWithPoints = wins.filter(t => hasPoints(t));
-  const lossesWithPoints = losses.filter(t => hasPoints(t));
-  const totalWinPts = winsWithPoints.reduce((s, t) => s + getPoints(t), 0);
-  const totalLossPts = lossesWithPoints.reduce((s, t) => s + getPoints(t), 0);
-  const profitFactor = totalLossPts !== 0 ? Math.abs(totalWinPts / totalLossPts) : 0;
-  const pfMissing = (wins.length - winsWithPoints.length) + (losses.length - lossesWithPoints.length);
-  const pfNote = pfMissing > 0 ? `Op punten (${pfMissing} trade(s) zonder exit niet meegerekend)` : 'Op punten — niet beïnvloed door positiegrootte';
+  // Profit Factor uses R-MULTIPLES so sizing errors don't pollute it.
+  // R-multiple = (exit - entry) / (entry - SL), signed by direction.
+  // Aggregate: PF = sum(winning R) / |sum(losing R)|
+  const winsWithR = [];
+  const lossesWithR = [];
+  filtered.forEach(t => {
+    const r = getRMultiple(t);
+    if (r === null) return;
+    if (r > 0) winsWithR.push(r);
+    else if (r < 0) lossesWithR.push(r);
+    // r === 0 (rare) excluded from PF
+  });
+  const totalWinR = winsWithR.reduce((s, r) => s + r, 0);
+  const totalLossR = lossesWithR.reduce((s, r) => s + r, 0); // negative
+  const profitFactor = totalLossR !== 0 ? Math.abs(totalWinR / totalLossR) : (totalWinR > 0 ? Infinity : 0);
+  const pfTotalUsable = winsWithR.length + lossesWithR.length;
+  const pfMissing = filtered.length - pfTotalUsable;
+  const pfNote = pfMissing > 0 
+    ? `Op R-multiples (${pfMissing} trade(s) zonder entry/exit/SL niet meegerekend)` 
+    : 'Op R-multiples — niet beïnvloed door positiegrootte';
   
   const beThreshold = getBreakevenThreshold();
   
@@ -2890,6 +3155,9 @@ function renderInsights() {
       <div class="insight-detail">Avg win: €${avgWin.toFixed(2)} / Avg loss: €${avgLoss.toFixed(2)}</div>
     </div>
   </div>`;
+  
+  // ====== 2R PAKKEN OF LATEN LOPEN? ======
+  html += render2RAnalysis(filtered);
   
   // Breakdown by instrument (only show when "all")
   if (insightsFilterInstrument === 'all') {
