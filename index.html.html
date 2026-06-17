@@ -1,0 +1,3766 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Trading Journal & Performance Tracker</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: #0f172a;
+    color: #e2e8f0;
+    min-height: 100vh;
+    padding: 20px;
+  }
+  .container { max-width: 1400px; margin: 0 auto; }
+  header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 24px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid #1e293b;
+  }
+  h1 { font-size: 24px; font-weight: 600; }
+  .date-display { color: #94a3b8; font-size: 14px; }
+  
+  nav {
+    display: flex;
+    gap: 4px;
+    margin-bottom: 24px;
+    background: #1e293b;
+    padding: 4px;
+    border-radius: 8px;
+    overflow-x: auto;
+  }
+  nav button {
+    flex: 1;
+    min-width: 120px;
+    padding: 10px 16px;
+    background: transparent;
+    color: #94a3b8;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+    white-space: nowrap;
+    transition: all 0.2s;
+  }
+  nav button:hover { color: #e2e8f0; }
+  nav button.active { background: #334155; color: #fff; }
+  
+  .panel { display: none; }
+  .panel.active { display: block; }
+  
+  .card {
+    background: #1e293b;
+    border-radius: 12px;
+    padding: 24px;
+    margin-bottom: 16px;
+  }
+  .card h2 {
+    font-size: 18px;
+    margin-bottom: 16px;
+    color: #f1f5f9;
+  }
+  .card h3 {
+    font-size: 15px;
+    margin-bottom: 12px;
+    color: #cbd5e1;
+    margin-top: 16px;
+  }
+  
+  /* Checklist */
+  .checklist-group {
+    margin-bottom: 20px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid #334155;
+  }
+  .checklist-group:last-child { border-bottom: none; }
+  .group-header {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 12px;
+  }
+  .group-title {
+    font-weight: 600;
+    color: #f1f5f9;
+  }
+  .group-weight {
+    font-size: 12px;
+    color: #94a3b8;
+  }
+  .check-item {
+    display: flex;
+    align-items: center;
+    padding: 10px;
+    margin-bottom: 6px;
+    background: #0f172a;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  .check-item:hover { background: #1a2842; }
+  .check-item input[type="checkbox"] {
+    margin-right: 12px;
+    width: 18px;
+    height: 18px;
+    cursor: pointer;
+    accent-color: #3b82f6;
+  }
+  .check-item.critical { border-left: 3px solid #ef4444; }
+  .check-item.medium { border-left: 3px solid #f59e0b; }
+  .check-item.light { border-left: 3px solid #64748b; }
+  .check-item label { flex: 1; cursor: pointer; font-size: 14px; }
+  .check-points { font-size: 12px; color: #64748b; margin-left: 8px; }
+  
+  /* Score display */
+  .score-display {
+    text-align: center;
+    padding: 24px;
+    border-radius: 12px;
+    margin-bottom: 16px;
+  }
+  .score-display.go { background: linear-gradient(135deg, #065f46, #047857); }
+  .score-display.caution { background: linear-gradient(135deg, #92400e, #b45309); }
+  .score-display.nogo { background: linear-gradient(135deg, #991b1b, #b91c1c); }
+  .score-number {
+    font-size: 48px;
+    font-weight: 700;
+    margin-bottom: 8px;
+  }
+  .score-label {
+    font-size: 16px;
+    font-weight: 600;
+    margin-bottom: 8px;
+  }
+  .score-advice {
+    font-size: 13px;
+    opacity: 0.9;
+  }
+  
+  /* Forms */
+  .form-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 12px;
+    margin-bottom: 16px;
+  }
+  .form-group {
+    display: flex;
+    flex-direction: column;
+  }
+  .form-group label {
+    font-size: 12px;
+    color: #94a3b8;
+    margin-bottom: 6px;
+    font-weight: 500;
+  }
+  input, select, textarea {
+    background: #0f172a;
+    border: 1px solid #334155;
+    color: #e2e8f0;
+    padding: 10px 12px;
+    border-radius: 6px;
+    font-size: 14px;
+    font-family: inherit;
+  }
+  input:focus, select:focus, textarea:focus {
+    outline: none;
+    border-color: #3b82f6;
+  }
+  textarea { resize: vertical; min-height: 80px; }
+  
+  button.primary {
+    background: #3b82f6;
+    color: white;
+    border: none;
+    padding: 12px 24px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 600;
+    transition: background 0.15s;
+  }
+  button.primary:hover { background: #2563eb; }
+  button.primary:disabled { background: #475569; cursor: not-allowed; }
+  
+  button.secondary {
+    background: #334155;
+    color: white;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 13px;
+    transition: background 0.15s;
+  }
+  button.secondary:hover { background: #475569; }
+  
+  button.danger {
+    background: #991b1b;
+    color: white;
+    border: none;
+    padding: 6px 12px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 12px;
+  }
+  
+  /* Tables */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+  }
+  th {
+    text-align: left;
+    padding: 10px;
+    background: #0f172a;
+    color: #94a3b8;
+    font-weight: 500;
+    border-bottom: 1px solid #334155;
+  }
+  td {
+    padding: 10px;
+    border-bottom: 1px solid #1e293b;
+  }
+  tr:hover td { background: #1a2842; }
+  .pnl-positive { color: #10b981; font-weight: 600; }
+  .pnl-negative { color: #ef4444; font-weight: 600; }
+  
+  /* Insights */
+  .insight-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 16px;
+  }
+  .insight-card {
+    background: #0f172a;
+    padding: 20px;
+    border-radius: 8px;
+    border-left: 3px solid #3b82f6;
+  }
+  .insight-card h4 {
+    font-size: 13px;
+    color: #94a3b8;
+    margin-bottom: 8px;
+    font-weight: 500;
+  }
+  .insight-value {
+    font-size: 24px;
+    font-weight: 700;
+    margin-bottom: 4px;
+  }
+  .insight-detail {
+    font-size: 12px;
+    color: #94a3b8;
+  }
+  
+  .breakdown-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 8px 0;
+    border-bottom: 1px solid #1e293b;
+    font-size: 14px;
+  }
+  .breakdown-row:last-child { border-bottom: none; }
+  .breakdown-bar {
+    height: 6px;
+    background: #1e293b;
+    border-radius: 3px;
+    overflow: hidden;
+    margin-top: 4px;
+  }
+  .breakdown-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #3b82f6, #60a5fa);
+    transition: width 0.3s;
+  }
+  
+  .empty-state {
+    text-align: center;
+    padding: 40px;
+    color: #64748b;
+  }
+  
+  .toast {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    background: #047857;
+    color: white;
+    padding: 12px 20px;
+    border-radius: 8px;
+    box-shadow: 0 10px 25px rgba(0,0,0,0.3);
+    opacity: 0;
+    transform: translateY(20px);
+    transition: all 0.3s;
+    z-index: 1000;
+  }
+  .toast.show { opacity: 1; transform: translateY(0); }
+  .toast.error { background: #b91c1c; }
+  
+  .emotion-slider {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 12px;
+  }
+  .emotion-slider label {
+    min-width: 130px;
+    font-size: 13px;
+    color: #cbd5e1;
+  }
+  input[type="range"] {
+    flex: 1;
+    accent-color: #3b82f6;
+  }
+  .slider-value {
+    min-width: 30px;
+    text-align: center;
+    font-weight: 600;
+    color: #60a5fa;
+  }
+  
+  .warning-box {
+    background: #7c2d12;
+    border-left: 4px solid #ef4444;
+    padding: 12px 16px;
+    border-radius: 6px;
+    margin-bottom: 16px;
+    font-size: 14px;
+  }
+  
+  .info-box {
+    background: #1e3a8a;
+    border-left: 4px solid #3b82f6;
+    padding: 12px 16px;
+    border-radius: 6px;
+    margin-bottom: 16px;
+    font-size: 13px;
+    color: #dbeafe;
+  }
+  
+  .stats-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 12px;
+    margin-bottom: 16px;
+  }
+  .stat-box {
+    background: #0f172a;
+    padding: 16px;
+    border-radius: 8px;
+    text-align: center;
+  }
+  .stat-label {
+    font-size: 11px;
+    color: #94a3b8;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 4px;
+  }
+  .stat-value {
+    font-size: 22px;
+    font-weight: 700;
+  }
+  
+  .loading {
+    text-align: center;
+    padding: 40px;
+    color: #94a3b8;
+  }
+  
+  @media (max-width: 768px) {
+    body { padding: 12px; }
+    .form-grid { grid-template-columns: 1fr; }
+    nav { flex-wrap: wrap; }
+    nav button { min-width: auto; flex: 1 1 45%; }
+  }
+</style>
+</head>
+<body>
+<!-- SUPABASE SETUP MODAL -->
+<div id="setupModal" style="display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.85); z-index:2000; padding:20px; overflow-y:auto;">
+  <div style="max-width:600px; margin:40px auto; background:#1e293b; padding:32px; border-radius:12px;">
+    <h2 style="margin-bottom:16px;">🔧 Eerste keer setup</h2>
+    <p style="color:#cbd5e1; margin-bottom:16px; font-size:14px; line-height:1.5;">
+      Voor je begint moet je je Supabase-gegevens invullen. Je vindt deze in je Supabase-project onder Settings → API.
+      <br><br>
+      <strong>Belangrijk:</strong> deze worden lokaal in je browser bewaard. Op elke nieuwe computer waar je deze tool opent moet je ze opnieuw invullen.
+    </p>
+    <div class="form-group" style="margin-bottom:12px;">
+      <label>Supabase Project URL</label>
+      <input type="text" id="setupUrl" placeholder="https://xxxxx.supabase.co">
+    </div>
+    <div class="form-group" style="margin-bottom:12px;">
+      <label>Supabase Anon Key (publieke key)</label>
+      <input type="text" id="setupKey" placeholder="eyJhbGc...">
+    </div>
+    <div class="form-group" style="margin-bottom:16px;">
+      <label>Je email (voor login)</label>
+      <input type="email" id="setupEmail" placeholder="jij@email.com">
+    </div>
+    <div class="form-group" style="margin-bottom:16px;">
+      <label>Wachtwoord</label>
+      <input type="password" id="setupPassword" placeholder="Minimaal 6 tekens">
+    </div>
+    <div style="display:flex; gap:8px; margin-bottom:8px;">
+      <button class="primary" onclick="setupSupabase('signup')" style="flex:1;">Account aanmaken</button>
+      <button class="primary" onclick="setupSupabase('login')" style="flex:1; background:#10b981;">Inloggen</button>
+    </div>
+    <div id="setupError" style="color:#ef4444; font-size:13px; margin-top:8px;"></div>
+    <p style="color:#94a3b8; font-size:12px; margin-top:16px;">
+      Eerste keer? Klik "Account aanmaken". Daarna gebruik je "Inloggen".
+    </p>
+  </div>
+</div>
+
+<!-- SCREENSHOT VIEWER MODAL -->
+<div id="screenshotViewerModal" style="display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.95); z-index:2400; padding:20px; overflow-y:auto;" onclick="closeScreenshotViewer(event)">
+  <div style="max-width:1200px; margin:20px auto; position:relative;" onclick="event.stopPropagation()">
+    <button onclick="closeScreenshotViewer()" style="position:absolute; top:0; right:0; background:transparent; border:none; color:#fff; font-size:32px; cursor:pointer; line-height:1; z-index:10;">×</button>
+    <div id="screenshotViewerCaption" style="color:#f1f5f9; margin-bottom:16px; font-size:16px; font-weight:600; padding-right:40px;"></div>
+    <div id="screenshotViewerImages" style="display:grid; gap:12px; margin-bottom:20px;"></div>
+    <div id="screenshotViewerDetails" style="background:#1e293b; border-radius:8px; padding:18px; color:#e2e8f0; font-size:14px; line-height:1.6;"></div>
+    <div id="screenshotViewerActions" style="display:flex; gap:8px; margin-top:16px; justify-content:flex-end;"></div>
+  </div>
+</div>
+
+<!-- STRATEGIC REMINDER MODAL -->
+<div id="reminderModal" style="display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.9); z-index:2500; padding:20px; overflow-y:auto;">
+  <div style="max-width:700px; margin:20px auto; background:#1e293b; padding:28px; border-radius:12px; position:relative;">
+    <button onclick="cancelReminderModal()" style="position:absolute; top:12px; right:12px; background:transparent; border:none; color:#94a3b8; font-size:24px; cursor:pointer; line-height:1;" title="Annuleren">×</button>
+    <h2 style="margin-bottom:8px; color:#f1f5f9; text-align:center; letter-spacing:2px;">REMINDER</h2>
+    <p style="color:#94a3b8; font-size:13px; margin-bottom:20px; text-align:center;">
+      Vink elk punt aan om bewust te lezen. Pas als alles aangevinkt staat kan je deze reminder sluiten.
+    </p>
+    <div id="reminderItemsContainer"></div>
+    <div style="margin-top:20px; padding:16px; background:#0f172a; border-radius:8px; border-left:3px solid #3b82f6;">
+      <div style="font-style:italic; color:#cbd5e1; font-size:14px; line-height:1.6; text-align:center;">
+        "Rijk worden gaat traag en revenge traden is klein.<br>Ik trade voor zelfcontrole, niet om rijk te willen zijn."
+      </div>
+    </div>
+    <button id="reminderCloseBtn" class="primary" onclick="closeReminderModal()" disabled style="width:100%; margin-top:16px; opacity:0.5;">Vink alle punten aan om verder te gaan</button>
+  </div>
+</div>
+
+<div class="container">
+  <header>
+    <div>
+      <h1>Trading Journal</h1>
+      <div class="date-display" id="dateDisplay"></div>
+    </div>
+    <div style="display:flex; gap:8px; align-items:center;">
+      <span id="userEmail" style="color:#94a3b8; font-size:13px;"></span>
+      <button class="secondary" onclick="exportData()">Export</button>
+      <button class="secondary" onclick="logout()">Uitloggen</button>
+    </div>
+  </header>
+  
+  <nav>
+    <button class="active" data-panel="checklist">Pre-Market Checklist</button>
+    <button data-panel="pretrade">Pre-Trade Check</button>
+    <button data-panel="strategies">Strategieën</button>
+    <button data-panel="trades">Trade Logging</button>
+    <button data-panel="dayreview">Dag Review</button>
+    <button data-panel="history">Geschiedenis</button>
+    <button data-panel="insights">Inzichten</button>
+    <button data-panel="settings">Instellingen</button>
+  </nav>
+
+  <!-- CHECKLIST PANEL -->
+  <div class="panel active" id="panel-checklist">
+    <div id="loadingChecklist" class="loading">Laden...</div>
+    <div id="checklistContent" style="display:none;">
+      <div class="card" id="scoreCard" style="padding:16px; position:sticky; top:0; z-index:100; box-shadow:0 4px 12px rgba(0,0,0,0.5);">
+        <div id="scoreDisplay" class="score-display" style="padding:14px; margin-bottom:12px;">
+          <div class="score-number" id="scoreNumber" style="font-size:28px; margin-bottom:4px;">0</div>
+          <div class="score-label" id="scoreLabel" style="font-size:14px; margin-bottom:4px;">Vink items aan</div>
+          <div class="score-advice" id="scoreAdvice" style="font-size:12px;">Maximumscore: 50 punten</div>
+        </div>
+        <button class="primary" id="saveChecklistBtn" style="width:100%;" onclick="saveChecklist()">Checklist opslaan voor vandaag</button>
+        <div id="todayChecklistInfo" style="margin-top:8px; font-size:12px; color:#94a3b8; text-align:center;"></div>
+      </div>
+      
+      <div class="card">
+        <h2>Pre-Market Checklist</h2>
+        <div class="info-box">
+          Vul dit elke ochtend in voor je markt opent. Onder 30 punten of een gefaalde kritieke factor = geen live trading vandaag.
+        </div>
+        <div id="checklistItems"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- PRE-TRADE CHECK PANEL -->
+  <div class="panel" id="panel-pretrade">
+    <div class="card">
+      <h2>Pre-Trade Check (Strategische Reminder)</h2>
+      <div class="info-box">
+        Dit is je strategische reminder. Doorloop deze punten <strong>vóór</strong> en <strong>tijdens</strong> de sessie. Wanneer je in de Pre-Market Checklist het vinkje "strategische reminder gelezen" aanvinkt, verschijnt er een popup waarin je elk punt actief moet aanvinken om door te kunnen.
+      </div>
+      
+      <div style="display:flex; gap:8px; margin-bottom:20px; flex-wrap:wrap;">
+        <button class="secondary" onclick="window.open('https://tradingeconomics.com/calendar?importance=3&countries=germany,united-kingdom,united-states', '_blank')">📅 Open Economic Calendar (3-stars, DE/UK/US)</button>
+        <button class="secondary" onclick="window.open('https://www.forexfactory.com/calendar', '_blank')">📅 ForexFactory Calendar</button>
+      </div>
+      
+      <div id="preTradeChecksContainer"></div>
+    </div>
+  </div>
+
+  <!-- STRATEGIES PANEL -->
+  <div class="panel" id="panel-strategies">
+    <div class="card">
+      <h2>Strategieën (naslagwerk)</h2>
+      <div class="info-box">
+        Hier vind je per strategie de criteria die je hoort te checken voor je een trade plaatst. Lees ze rustig door — dit is informatie, geen vinkjes.
+      </div>
+      <div id="strategiesContent"></div>
+    </div>
+  </div>
+
+  <!-- TRADES PANEL -->
+  <div class="panel" id="panel-trades">
+    <div class="card">
+      <h2>Nieuwe Trade Loggen</h2>
+      <div id="tradeWarning"></div>
+      
+      <h3>Trade Details</h3>
+      <div class="form-grid">
+        <div class="form-group">
+          <label>Instrument</label>
+          <select id="tradeInstrument" onchange="handleInstrumentChange()">
+            <option value="DAX">DAX</option>
+            <option value="UK100">UK100</option>
+            <option value="XAU">XAU (Goud)</option>
+            <option value="US30">US30</option>
+            <option value="US100">US100</option>
+            <option value="US500">US500</option>
+            <!-- CUSTOM_INSTRUMENTS_PLACEHOLDER -->
+            <option value="__custom__">+ Nieuw aandeel toevoegen...</option>
+            <option value="ander">Ander (eenmalig)</option>
+          </select>
+          <input type="text" id="tradeInstrumentCustom" placeholder="Naam aandeel/instrument" style="display:none; margin-top:6px;">
+        </div>
+        <div class="form-group">
+          <label>Richting</label>
+          <select id="tradeDirection">
+            <option value="long">Long</option>
+            <option value="short">Short</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Sessie</label>
+          <select id="tradeSession">
+            <option value="voormiddag">Voormiddag (9-11u)</option>
+            <option value="namiddag">Namiddag (15:30-17:30u)</option>
+            <option value="ander">Ander</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Tijdsblok</label>
+          <select id="tradeTimeBlock">
+            <option value="9-10">9:00-10:00</option>
+            <option value="10-11">10:00-11:00</option>
+            <option value="15:30-16:30">15:30-16:30</option>
+            <option value="16:30-17:30">16:30-17:30</option>
+            <option value="ander">Ander</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Exact uur entry (uu:mm)</label>
+          <input type="time" id="tradeExactTime" placeholder="HH:MM" oninput="updateTradeDuration()">
+        </div>
+        <div class="form-group">
+          <label>Exact uur exit (uu:mm)</label>
+          <input type="time" id="tradeExitTime" placeholder="HH:MM" oninput="updateTradeDuration()">
+        </div>
+        <div class="form-group">
+          <label>Duur trade</label>
+          <div id="tradeDurationDisplay" style="padding:10px 12px; background:#0f172a; border:1px solid #334155; border-radius:6px; font-size:14px; color:#94a3b8;">— min</div>
+        </div>
+      </div>
+      
+      <div class="form-grid">
+        <div class="form-group">
+          <label>Entry prijs</label>
+          <input type="number" id="tradeEntry" step="0.01" placeholder="0.00">
+        </div>
+        <div class="form-group">
+          <label>Exit prijs</label>
+          <input type="number" id="tradeExit" step="0.01" placeholder="0.00">
+        </div>
+        <div class="form-group">
+          <label>Stop loss</label>
+          <input type="number" id="tradeStop" step="0.01" placeholder="0.00">
+        </div>
+        <div class="form-group">
+          <label>Target</label>
+          <input type="number" id="tradeTarget" step="0.01" placeholder="0.00">
+        </div>
+      </div>
+      
+      <div class="form-grid">
+        <div class="form-group">
+          <label>P&L (€)</label>
+          <input type="number" id="tradePnL" step="0.01" placeholder="0.00">
+        </div>
+        <div class="form-group">
+          <label>Aantal contracten/lots</label>
+          <input type="number" id="tradeSize" step="0.01" placeholder="1">
+        </div>
+        <div class="form-group">
+          <label>Setup type</label>
+          <select id="tradeSetup">
+            <option value="">-- Kies setup --</option>
+            <option value="break-retest">Break & Retest</option>
+            <option value="reversal">Reversal</option>
+            <option value="in-range">In Range</option>
+            <option value="orb">Opening Range Breakout</option>
+            <option value="hod-lod-breakout">HOD/LOD Breakout</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Plan gevolgd?</label>
+          <select id="tradePlanFollowed">
+            <option value="ja">Ja, volledig</option>
+            <option value="gedeeltelijk">Gedeeltelijk</option>
+            <option value="nee">Nee, geïmproviseerd</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Verbeterpunt</label>
+          <select id="tradeImprovement">
+            <option value="">-- Selecteer (optioneel) --</option>
+            <option value="setup_correct">Setup was correct, geen verbeterpunten</option>
+            <option value="entry_too_early">Entry te vroeg genomen</option>
+            <option value="entry_too_late">Entry te laat genomen</option>
+            <option value="sl_too_tight">Stoploss te strak</option>
+            <option value="sl_moved_too_fast">Stoploss te snel opgeschoven (wachten tot 1:1 RR)</option>
+            <option value="tp_too_fast">Take profit te snel gepakt</option>
+            <option value="tp_too_far">Take profit te ver weg</option>
+          </select>
+        </div>
+      </div>
+      
+      <h3>Trade Analyse</h3>
+      <div class="info-box" style="font-size:12px;">Deze gegevens worden gebruikt voor statistieken en patroon-analyse per instrument.</div>
+      <div class="form-grid">
+        <div class="form-group">
+          <label>Mee met daily trend?</label>
+          <select id="evalDailyTrend">
+            <option value="">-- Selecteer --</option>
+            <option value="ja">Ja</option>
+            <option value="nee">Nee</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Op welk level?</label>
+          <select id="evalLevel">
+            <option value="">-- Selecteer --</option>
+            <option value="YH">Yesterday High (YH)</option>
+            <option value="YL">Yesterday Low (YL)</option>
+            <option value="AsiaH">Asia High (AH)</option>
+            <option value="AsiaL">Asia Low (AL)</option>
+            <option value="LondonH">London High (LH)</option>
+            <option value="LondonL">London Low (LL)</option>
+            <option value="other_key">Ander key level</option>
+            <option value="none">Geen level</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Trade tov level</label>
+          <select id="evalLevelPrecision">
+            <option value="">-- Selecteer --</option>
+            <option value="exact">Exact op het level</option>
+            <option value="near">In de buurt van het level</option>
+            <option value="far">Niet bij een level</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Indexen in de rug?</label>
+          <select id="evalIndices">
+            <option value="">-- Selecteer --</option>
+            <option value="ja">Ja</option>
+            <option value="nee">Nee</option>
+            <option value="mixed">Gemengd</option>
+            <option value="not_checked">Niet bekeken</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Timeframe entry</label>
+          <select id="evalTimeframe">
+            <option value="">-- Selecteer --</option>
+            <option value="1min">1 min</option>
+            <option value="2min">2 min</option>
+            <option value="3min">3 min</option>
+            <option value="5min">5 min</option>
+            <option value="15min">15 min</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Hammercandle aanwezig?</label>
+          <select id="evalHammer">
+            <option value="">-- Selecteer --</option>
+            <option value="ja">Ja</option>
+            <option value="nee">Nee</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Indien uitgetikt</label>
+          <select id="evalStoppedOut">
+            <option value="">-- Selecteer (alleen bij verlies) --</option>
+            <option value="went_after">Uitgetikt, trade vertrok daarna alsnog</option>
+            <option value="never_worked">Uitgetikt, trade deed nooit wat zou moeten</option>
+            <option value="not_applicable">Niet uitgetikt / N/A</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Indien gevoelsmatig afgesloten</label>
+          <select id="evalManualClose">
+            <option value="">-- Selecteer (alleen bij handmatige exit) --</option>
+            <option value="manual_went_after">Vertrok daarna alsnog (te vroeg gesloten)</option>
+            <option value="manual_never_worked">Deed nooit wat zou moeten (terecht gesloten)</option>
+            <option value="manual_na">Niet gevoelsmatig gesloten / N/A</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>VWAP invloed?</label>
+          <select id="evalVwap">
+            <option value="">-- Selecteer --</option>
+            <option value="positive">Ja, positief (steun/weerstand werkte)</option>
+            <option value="negative">Ja, negatief (door VWAP gebroken)</option>
+            <option value="neutral">Geen merkbare invloed</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Exit strategie</label>
+          <select id="evalExit">
+            <option value="">-- Selecteer --</option>
+            <option value="2R_secured">2R gepakt</option>
+            <option value="trailed_sl">SL mee verschoven (+2R)</option>
+            <option value="manual_exit">Handmatig gesloten</option>
+            <option value="stopped_out">Stoploss geraakt</option>
+          </select>
+        </div>
+        <div class="form-group" style="background:#1e293b; padding:12px; border-radius:8px; border-left:3px solid #60a5fa;">
+          <label style="display:flex; align-items:center; gap:10px; cursor:pointer; margin-bottom:0;">
+            <input type="checkbox" id="evalTouched2R" style="width:18px; height:18px; cursor:pointer;">
+            <span style="font-weight:600;">Trade heeft 2R aangeraakt tijdens het verloop</span>
+          </label>
+          <div style="font-size:11px; color:#94a3b8; margin-top:6px; margin-left:28px;">Vink aan als de prijs op enig moment het 2R-niveau heeft bereikt. Dit is essentieel voor de "2R pakken of laten lopen?" analyse in Inzichten.</div>
+        </div>
+        <div class="form-group">
+          <label>ATR invloed?</label>
+          <select id="evalAtr">
+            <option value="">-- Selecteer --</option>
+            <option value="ja">Ja</option>
+            <option value="nee">Nee</option>
+            <option value="nvt">N/A</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Mentor gevolgd?</label>
+          <select id="evalMentorFollowed" onchange="toggleMentorNameField()">
+            <option value="">-- Selecteer --</option>
+            <option value="ja">Ja</option>
+            <option value="nee">Nee</option>
+          </select>
+        </div>
+        <div class="form-group" id="mentorNameGroup" style="display:none;">
+          <label>Welke mentor?</label>
+          <input type="text" id="evalMentorName" placeholder="Naam mentor">
+        </div>
+      </div>
+      
+      <h3>Emoties</h3>
+      <div class="info-box" style="margin-bottom:12px; font-size:12px;">
+        Op alle schalen: <strong>1 = goed/weinig, 10 = slecht/veel</strong> (behalve Vertrouwen: 1 = weinig vertrouwen, 10 = veel vertrouwen)
+      </div>
+      <div class="emotion-slider">
+        <label>Stress vooraf (1=rustig, 10=gestresst):</label>
+        <input type="range" id="emotionStress" min="1" max="10" value="5" oninput="document.getElementById('emotionStressVal').textContent=this.value">
+        <span class="slider-value" id="emotionStressVal">5</span>
+      </div>
+      <div class="emotion-slider">
+        <label>Vertrouwen vooraf (1=laag, 10=hoog):</label>
+        <input type="range" id="emotionConfidence" min="1" max="10" value="5" oninput="document.getElementById('emotionConfidenceVal').textContent=this.value">
+        <span class="slider-value" id="emotionConfidenceVal">5</span>
+      </div>
+      <div class="emotion-slider">
+        <label>FOMO vooraf (1=geen, 10=heel hoog):</label>
+        <input type="range" id="emotionFomo" min="1" max="10" value="3" oninput="document.getElementById('emotionFomoVal').textContent=this.value">
+        <span class="slider-value" id="emotionFomoVal">3</span>
+      </div>
+      <div class="emotion-slider">
+        <label>Frustratie na (1=geen, 10=heel hoog):</label>
+        <input type="range" id="emotionFrustration" min="1" max="10" value="3" oninput="document.getElementById('emotionFrustrationVal').textContent=this.value">
+        <span class="slider-value" id="emotionFrustrationVal">3</span>
+      </div>
+      <div class="emotion-slider">
+        <label>Tevredenheid na (1=ontevreden, 10=zeer tevreden):</label>
+        <input type="range" id="emotionSatisfaction" min="1" max="10" value="5" oninput="document.getElementById('emotionSatisfactionVal').textContent=this.value">
+        <span class="slider-value" id="emotionSatisfactionVal">5</span>
+      </div>
+      
+      <h3>Notities</h3>
+      <div class="form-group" style="margin-bottom:12px;">
+        <label>Waarom deze trade? Wat zag je?</label>
+        <textarea id="tradeReason" placeholder="Beschrijf wat je zag, waarom je instapte..."></textarea>
+      </div>
+      <div class="form-group" style="margin-bottom:16px;">
+        <label>Lessen / observaties</label>
+        <textarea id="tradeLessons" placeholder="Wat ging goed? Wat zou je anders doen?"></textarea>
+      </div>
+      
+      <h3>Screenshots</h3>
+      <div class="info-box" style="font-size:12px;">
+        Voeg tot 2 screenshots toe per trade: bv. entry + exit, of voor + na. Plak met Ctrl+V (gaat naar de eerste lege slot) of klik op een slot. Max 4MB per afbeelding.
+      </div>
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:12px;">
+        <div>
+          <div style="font-size:12px; color:#94a3b8; margin-bottom:6px; font-weight:500;">Screenshot 1 (bv. bij entry)</div>
+          <div id="screenshotDropZone1" style="border:2px dashed #334155; border-radius:8px; padding:18px; text-align:center; cursor:pointer; transition:all 0.2s;" onclick="document.getElementById('tradeScreenshotInput1').click()">
+            <div id="screenshotPlaceholder1" style="color:#94a3b8; font-size:13px;">
+              📷 Klik of plak (Ctrl+V)
+            </div>
+            <img id="screenshotPreview1" style="display:none; max-width:100%; max-height:200px; border-radius:6px;">
+          </div>
+          <input type="file" id="tradeScreenshotInput1" accept="image/*" style="display:none;" onchange="handleScreenshotUpload(event, 1)">
+          <button id="screenshotRemoveBtn1" type="button" class="secondary" onclick="removeScreenshot(1)" style="display:none; margin-top:6px; font-size:12px;">🗑️ Verwijder</button>
+        </div>
+        <div>
+          <div style="font-size:12px; color:#94a3b8; margin-bottom:6px; font-weight:500;">Screenshot 2 (bv. bij exit)</div>
+          <div id="screenshotDropZone2" style="border:2px dashed #334155; border-radius:8px; padding:18px; text-align:center; cursor:pointer; transition:all 0.2s;" onclick="document.getElementById('tradeScreenshotInput2').click()">
+            <div id="screenshotPlaceholder2" style="color:#94a3b8; font-size:13px;">
+              📷 Klik of plak (Ctrl+V)
+            </div>
+            <img id="screenshotPreview2" style="display:none; max-width:100%; max-height:200px; border-radius:6px;">
+          </div>
+          <input type="file" id="tradeScreenshotInput2" accept="image/*" style="display:none;" onchange="handleScreenshotUpload(event, 2)">
+          <button id="screenshotRemoveBtn2" type="button" class="secondary" onclick="removeScreenshot(2)" style="display:none; margin-top:6px; font-size:12px;">🗑️ Verwijder</button>
+        </div>
+      </div>
+      <div style="margin-bottom:16px;"></div>
+      
+      <button class="primary" onclick="saveTrade()">Trade opslaan</button>
+      
+      <div id="editDeleteZone" style="display:none; margin-top:24px; padding-top:20px; border-top:1px solid #334155;">
+        <div style="font-size:13px; color:#94a3b8; margin-bottom:10px;">Wil je deze trade liever verwijderen?</div>
+        <button class="secondary" onclick="deleteCurrentEditingTrade()" style="font-size:13px; color:#f87171; border:1px solid #7c2d12;">🗑️ Deze trade verwijderen</button>
+      </div>
+    </div>
+    
+    <div class="card">
+      <h2>Trades Vandaag</h2>
+      <div id="todayTrades"></div>
+    </div>
+  </div>
+
+  <!-- DAY REVIEW PANEL (minimaal) -->
+  <div class="panel" id="panel-dayreview">
+    <div class="card">
+      <h2>Dag Afsluiting</h2>
+      <div class="info-box">Korte afsluiting van de dag. Eén zin per veld is genoeg — bewust laaggehouden zodat het invullen geen drempel is.</div>
+      
+      <div id="dayStats" class="stats-row"></div>
+      
+      <div class="form-group" style="margin-bottom:16px;">
+        <label>Belangrijkste les van vandaag</label>
+        <textarea id="reviewLesson" placeholder="Eén concrete les. Bv. 'Ik nam een trade in extensie van 9EMA — niet meer doen.'" style="min-height:60px;"></textarea>
+      </div>
+      
+      <button class="primary" onclick="saveDayReview()">Dag afsluiten</button>
+      <div id="dayReviewSavedInfo" style="margin-top:8px; font-size:12px; color:#94a3b8; text-align:center;"></div>
+    </div>
+  </div>
+
+  <!-- HISTORY PANEL -->
+  <div class="panel" id="panel-history">
+    <div class="card">
+      <h2>Trade Geschiedenis</h2>
+      <div id="allTrades"></div>
+    </div>
+    <div class="card">
+      <h2>Checklist Geschiedenis</h2>
+      <div id="checklistHistory"></div>
+    </div>
+    <div class="card">
+      <h2>Dagelijkse Lessen</h2>
+      <div id="lessonsHistory"></div>
+    </div>
+  </div>
+
+  <!-- INSIGHTS PANEL -->
+  <div class="panel" id="panel-insights">
+    <div class="card">
+      <h2>Performance Inzichten</h2>
+      <div id="insightsContent">
+        <div class="empty-state">Log eerst een paar trades om inzichten te zien.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SETTINGS PANEL -->
+  <div class="panel" id="panel-settings">
+    <div class="card">
+      <h2>Instellingen</h2>
+      <div class="form-group" style="margin-bottom:16px;">
+        <label>Maximum trades per dag</label>
+        <input type="number" id="settingMaxTrades" value="3" min="1" max="20">
+      </div>
+      <div class="form-group" style="margin-bottom:16px;">
+        <label>Daily loss limit (€)</label>
+        <input type="number" id="settingDailyLoss" value="500" min="0">
+      </div>
+      <div class="form-group" style="margin-bottom:16px;">
+        <label>Risico per trade (% van account)</label>
+        <input type="number" id="settingRiskPerTrade" value="1" min="0.1" max="5" step="0.1">
+      </div>
+      <div class="form-group" style="margin-bottom:16px;">
+        <label>Breakeven drempel (€)</label>
+        <input type="number" id="settingBreakevenThreshold" value="5" min="0" step="0.5">
+        <div style="font-size:11px; color:#94a3b8; margin-top:4px;">Trades met P&L tussen ±deze drempel tellen als breakeven, niet als winst of verlies.</div>
+      </div>
+      <button class="primary" onclick="saveSettings()">Instellingen opslaan</button>
+    </div>
+    <div class="card">
+      <h2>Data Beheer</h2>
+      <p style="color:#94a3b8; font-size:13px; margin-bottom:12px;">Je data wordt veilig opgeslagen. Maak regelmatig een backup via Export.</p>
+      <button class="secondary" onclick="exportData()">Export alle data (JSON)</button>
+      <button class="danger" onclick="resetAllData()" style="margin-left:8px;">Reset alle data</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast" class="toast"></div>
+
+<script>
+// ==================== CHECKLIST DEFINITION ====================
+const CHECKLIST_ITEMS = [
+  // Critical (5 points each, deal-breakers if 0)
+  { id: 'sleep', label: '7+ uur geslapen vannacht', points: 5, group: 'critical', deal_breaker: true },
+  { id: 'alcohol', label: 'Geen alcohol gisteravond (of >12u geleden)', points: 5, group: 'critical', deal_breaker: true },
+  { id: 'mental', label: 'Mentaal stabiel (geen ruzie, acute stress, emotionele dip)', points: 5, group: 'critical', deal_breaker: true },
+  { id: 'alone', label: 'Alleen in het kantoor / niet afgeleid', points: 5, group: 'critical', deal_breaker: true },
+  { id: 'recent_market', label: 'Niet langer dan 3 dagen geleden de markt bestudeerd', points: 5, group: 'critical', deal_breaker: true },
+  { id: 'strategic_reminder', label: 'Strategische reminder gelezen', points: 5, group: 'critical', deal_breaker: true },
+  // Medium (3 points each)
+  { id: 'walk', label: 'Wandeling van 20+ min gemaakt', points: 3, group: 'medium' },
+  { id: 'plan_ready', label: 'Trading plan en levels voor vandaag voorbereid', points: 3, group: 'medium' },
+  { id: 'agenda', label: 'Economische agenda gecheckt', points: 3, group: 'medium' },
+  { id: 'no_news', label: 'Geen grote red-flag news events tijdens sessie', points: 3, group: 'medium' },
+  { id: 'prev_journal', label: 'Vorige trading dag goed afgesloten (journal ingevuld)', points: 3, group: 'medium' },
+  // Light (1 point each)
+  { id: 'breakfast', label: 'Gezond ontbeten', points: 1, group: 'light' },
+  { id: 'desk', label: 'Bureau opgeruimd', points: 1, group: 'light' },
+  { id: 'phone', label: 'Telefoon op stil/weg', points: 1, group: 'light' },
+  { id: 'water', label: 'Water binnen handbereik', points: 1, group: 'light' },
+  { id: 'no_pressure', label: 'Geen tijdsdruk (geen afspraak komende 3u)', points: 1, group: 'light' }
+];
+
+const MAX_SCORE = CHECKLIST_ITEMS.reduce((s, i) => s + i.points, 0);
+
+// ==================== STRATEGY CHECKLISTS ====================
+const STRATEGY_CHECKLISTS = {
+  'break-retest': {
+    name: 'Break & Retest',
+    description: 'Level breekt duidelijk, prijs komt terug om te testen, dan instappen in richting van break.',
+    sections: [
+      {
+        title: 'Context',
+        critical: true,
+        items: [
+          'Daily trend bepaald',
+          'Levels op urenchart getekend',
+          'Indexen in de rug',
+          'Hoofdscherm: 5min, levels van 1u',
+          'Geen high-impact nieuws verwacht in komend uur'
+        ]
+      },
+      {
+        title: 'Break Confirmatie',
+        critical: true,
+        items: [
+          'Level is duidelijk doorbroken (er moet doorheen gegaan zijn)',
+          'Candle gesloten voorbij het level (niet alleen een wik)',
+          'Volume bij de break (versterkt de richting)',
+          'Geen directe terugtrekking naar binnen het range'
+        ]
+      },
+      {
+        title: 'Retest Kwaliteit',
+        critical: true,
+        items: [
+          'Prijs komt terug naar het gebroken level',
+          'Retest raakt level aan, maar valt er niet diep door',
+          'Bevestigingscandle bij retest (rejection / hammer)',
+          'Volume neemt af bij retest (gezond)',
+          'Niet in extreme extensie van 9EMA'
+        ]
+      },
+      {
+        title: 'Entry & Risk',
+        critical: true,
+        items: [
+          'Entry na sluiten van retest-bevestigingscandle (5min)',
+          'SL net voorbij het level (op 3min TF bekeken)',
+          'R/R minimum 1:2',
+          'Target identificeerbaar (volgend level / 9EMA)',
+          'Niet break&retest doen in extreme extensie'
+        ]
+      }
+    ]
+  },
+  'reversal': {
+    name: 'Reversal',
+    description: 'Reversal in richting van hoofdtrend, op support/resistance levels. Tegen de korte-termijn beweging.',
+    sections: [
+      {
+        title: 'Trend & Context',
+        critical: true,
+        items: [
+          'Reversal is in richting van de hoofdtrend (daily)',
+          'Op een duidelijk support of resistance level',
+          'Voldoende ruimte tot volgend level of VWAP',
+          'Indexen ondersteunen de richting',
+          'Geen aankomend high-impact nieuws'
+        ]
+      },
+      {
+        title: 'Reversal Setup',
+        critical: true,
+        items: [
+          'LH (lagere high) of HL (hogere low) gevormd',
+          'Hammer candle / pin bar op 3 of 5 min TF',
+          'Bij short: prijs mag boven lijn geweest zijn, NIET eronder',
+          'Bij long: prijs mag onder lijn geweest zijn, NIET erboven',
+          'Bevestigingscandle in reversal-richting'
+        ]
+      },
+      {
+        title: 'Volatiliteit',
+        critical: false,
+        items: [
+          'ATR tussen 80-110%',
+          'Niet in extreme extensie van EMA (intraday)',
+          'Geen fake-out signalen op lower TF (5/15min)'
+        ]
+      },
+      {
+        title: 'Entry & Risk',
+        critical: true,
+        items: [
+          'SL in lijn met ATR (10-20%)',
+          'Fibonacci 50% retracement op level (extra confirmatie)',
+          'R/R minimum 1:2',
+          'Positiegrootte correct berekend'
+        ]
+      }
+    ]
+  },
+  'in-range': {
+    name: 'In Range',
+    description: 'Markt beweegt in een duidelijke range (sideways). Tradeer van rand naar rand: koop bij range-bodem, verkoop bij range-top.',
+    sections: [
+      {
+        title: 'Context',
+        critical: true,
+        items: [
+          'Markt is sideways, geen sterke trend',
+          'Range duidelijk gedefinieerd (minstens 2-3 raakpunten boven en onder)',
+          'Range breed genoeg voor minstens 2R (top - bodem ÷ 3)',
+          'Geen high-impact nieuws komend dat range kan breken',
+          'Indexen ook in range / geen sterke directionele druk'
+        ]
+      },
+      {
+        title: 'Entry Setup',
+        critical: true,
+        items: [
+          'Prijs raakt range-rand (top voor short, bodem voor long)',
+          'Reactie zichtbaar: rejection wick / pin bar / hammer',
+          'Volume neemt af op approach van rand',
+          'Geen breakout-volume (zou range-break signaleren)',
+          'Confirmatiecandle in tegengestelde richting'
+        ]
+      },
+      {
+        title: 'Risk Management',
+        critical: true,
+        items: [
+          'SL net voorbij range-rand (5-10 punten buffer)',
+          'TP eerste = midden van range (1R-1.5R)',
+          'TP tweede = tegenoverliggende rand (2R+)',
+          'Sluit positie als prijs door range-rand breekt',
+          'Geen positie houden als range-break dreigt op nieuws'
+        ]
+      }
+    ]
+  },
+  'orb': {
+    name: 'Opening Range Breakout',
+    description: 'Eerste 15-30 min vormt de opening range; breakout in trendrichting traden.',
+    sections: [
+      {
+        title: 'Voorbereiding',
+        critical: true,
+        items: [
+          'Eerste 15min (of 30min) candle vanaf sessie-open afgewacht',
+          'High en low van opening range duidelijk gemarkeerd',
+          'Daily trend bepaald (breakout met trend = sterker)',
+          'Levels eromheen (YH, YL, Asia) gecheckt',
+          'Geen high-impact nieuws in eerste uur'
+        ]
+      },
+      {
+        title: 'Breakout Kwaliteit',
+        critical: true,
+        items: [
+          'Prijs breekt high of low van opening range duidelijk',
+          'Candle sluit voorbij het level (niet alleen wik)',
+          'Volume bij de breakout',
+          'Niet in extreme extensie van 9EMA',
+          'Indexen ondersteunen de richting'
+        ]
+      },
+      {
+        title: 'Entry & Risk',
+        critical: true,
+        items: [
+          'Entry op breakout sluiting OF na retest van level',
+          'SL aan andere kant van opening range (of dichter na retest)',
+          'R/R minimum 1:2 naar volgend key level',
+          'Positie groot genoeg voor zinvolle target maar binnen 1% risk'
+        ]
+      }
+    ]
+  },
+  'hod-lod-breakout': {
+    name: 'HOD/LOD Breakout',
+    description: 'High of Day / Low of Day breakout. Werkt het best na gaps >2% en sterke trend.',
+    sections: [
+      {
+        title: 'Context & Trend',
+        critical: true,
+        items: [
+          'Daily trend duidelijk bepaald (mee met de trend traden)',
+          'Gap > 2% (tussen close en open, niet wiks) - bonus indien aanwezig',
+          'Gap richting volgt daily trend',
+          'Indexen (US500) in de rug (tenzij earnings/news)',
+          'Nieuws gecheckt op Yahoo Finance / Benzinga'
+        ]
+      },
+      {
+        title: 'Setup & Levels',
+        critical: true,
+        items: [
+          'Levels getekend op urengrafiek',
+          'Laatste highs/lows op urenchart geïdentificeerd',
+          'Geen levels in de weg (vrije lucht)',
+          'Pullback groot genoeg (minimaal 50% retracement)',
+          'Break en retest geconfirmeerd op 5min TF',
+          'Candle gesloten boven/onder level (niet alleen wik)'
+        ]
+      },
+      {
+        title: 'Volatiliteit & Extensie',
+        critical: false,
+        items: [
+          'ATR tussen 80-120%',
+          'Niet te ver van 9EMA (geen extreme extensie)',
+          'VWAP-extensie gecheckt',
+          'Ruimte naar target (minimum 2R)'
+        ]
+      },
+      {
+        title: 'Entry & Risk',
+        critical: true,
+        items: [
+          'Entry na sluiten van retest-candle (5min TF)',
+          'Stop loss bepaald (in lijn met ATR, 10-20%)',
+          'SL geplaatst op 3min TF',
+          'Risk/Reward minimum 1:2',
+          'Positiegrootte berekend op basis van risico-regel (max 1%)'
+        ]
+      }
+    ]
+  }
+};
+
+// ==================== PRE-TRADE CHECKS ====================
+// Two sections: 'general' = strategic reminder, done before trading session starts
+//               'per_trade' = checked just before placing each trade
+const PRE_TRADE_CHECKS = [
+  // ALGEMEEN - voor de sessie (kritiek)
+  {
+    id: 'no_news',
+    label: 'Geen nieuws / earnings het komende uur',
+    detail: 'Check op tradingeconomics.com (3-sterren, Duitsland/UK/US) of forexfactory.com',
+    section: 'general',
+    critical: true
+  },
+  {
+    id: 'levels_drawn',
+    label: 'YH, YL, Asia high/low en andere key levels aangeduid',
+    detail: 'Yesterday high/low, Asia session high/low, week levels, month levels',
+    section: 'general',
+    critical: true
+  },
+  
+  // PER TRADE - vlak voor instappen
+  {
+    id: 'with_trend',
+    label: 'Trade gaat MEE met de daily trend',
+    detail: 'Tegen-trend trades zijn alleen aan te raden bij specifieke reversal-setups op support/resistance',
+    section: 'per_trade',
+    critical: false
+  },
+  {
+    id: 'ema_9',
+    label: '9 EMA gecheckt (geen extreme extensie)',
+    detail: 'Bij extensie: geen break&retest. Let op fake-outs op 5/15min.',
+    section: 'per_trade',
+    critical: false
+  },
+  {
+    id: 'vwap_position',
+    label: 'VWAP gecheckt (positie & afstand)',
+    detail: 'Boven/onder VWAP, en niet te ver weg ervan',
+    section: 'per_trade',
+    critical: false
+  },
+  {
+    id: 'rr_room',
+    label: 'Minimaal 2R haalbaar',
+    detail: 'Reken voor: afstand naar volgend level / EMA / VWAP. Geen ruimte = geen trade.',
+    section: 'per_trade',
+    critical: false
+  },
+  {
+    id: 'atr_ok',
+    label: 'ATR nog niet bereikt',
+    detail: 'Te hoog = al uitgespeeld. Alleen op D en 4u TF betrouwbaar.',
+    section: 'per_trade',
+    critical: false
+  },
+  {
+    id: 'hammer_candle',
+    label: 'Hammer candle confirmation',
+    detail: 'Hammer / pin op 3 of 5min TF, of andere setup-specifieke confirmatie',
+    section: 'per_trade',
+    critical: false
+  },
+  {
+    id: 'risk_1pct',
+    label: 'Risk Unit maximaal 1%',
+    detail: 'Bereken vooraf je max €-risico per trade. Bij halve risk-day: 0.5%.',
+    section: 'per_trade',
+    critical: false
+  },
+  {
+    id: 'sl_correct',
+    label: 'Stop loss kan correct geplaatst worden',
+    detail: 'Logische plaats (achter level/wik/structuur), niet willekeurig dichtbij om size te vergroten.',
+    section: 'per_trade',
+    critical: false
+  }
+];
+
+// ==================== SUPABASE STORAGE ====================
+let sb = null;
+let currentUser = null;
+
+function initSupabase() {
+  const url = localStorage.getItem('sb_url');
+  const key = localStorage.getItem('sb_key');
+  if (url && key && window.supabase) {
+    sb = window.supabase.createClient(url, key);
+    return true;
+  }
+  return false;
+}
+
+async function setupSupabase(mode) {
+  const url = document.getElementById('setupUrl').value.trim();
+  const key = document.getElementById('setupKey').value.trim();
+  const email = document.getElementById('setupEmail').value.trim();
+  const password = document.getElementById('setupPassword').value;
+  const errEl = document.getElementById('setupError');
+  errEl.textContent = '';
+  
+  if (!url || !key || !email || !password) {
+    errEl.textContent = 'Vul alle velden in.';
+    return;
+  }
+  
+  if (!url.startsWith('https://') || !url.includes('supabase')) {
+    errEl.textContent = 'URL moet beginnen met https:// en supabase bevatten.';
+    return;
+  }
+  
+  try {
+    localStorage.setItem('sb_url', url);
+    localStorage.setItem('sb_key', key);
+    sb = window.supabase.createClient(url, key);
+    
+    let result;
+    if (mode === 'signup') {
+      result = await sb.auth.signUp({ email, password });
+      if (result.error) throw result.error;
+      if (result.data.user && !result.data.session) {
+        errEl.style.color = '#10b981';
+        errEl.textContent = '✓ Account aangemaakt! Check je email voor bevestiging, daarna kan je inloggen.';
+        return;
+      }
+    } else {
+      result = await sb.auth.signInWithPassword({ email, password });
+      if (result.error) throw result.error;
+    }
+    
+    currentUser = result.data.user;
+    document.getElementById('setupModal').style.display = 'none';
+    document.getElementById('userEmail').textContent = currentUser.email;
+    showToast('Ingelogd');
+    await loadAllData();
+    renderChecklist();
+    renderTodayTrades();
+    loadSettings();
+    updateTradeWarning();
+  } catch (err) {
+    errEl.textContent = 'Fout: ' + err.message;
+  }
+}
+
+async function checkAuth() {
+  if (!initSupabase()) {
+    document.getElementById('setupModal').style.display = 'block';
+    return false;
+  }
+  
+  const { data: { session } } = await sb.auth.getSession();
+  if (!session) {
+    document.getElementById('setupModal').style.display = 'block';
+    return false;
+  }
+  
+  currentUser = session.user;
+  document.getElementById('userEmail').textContent = currentUser.email;
+  return true;
+}
+
+async function logout() {
+  if (sb) await sb.auth.signOut();
+  localStorage.removeItem('sb_url');
+  localStorage.removeItem('sb_key');
+  location.reload();
+}
+
+// Storage wrapper using Supabase
+const cloudStorage = {
+  async getAll(table) {
+    if (!sb || !currentUser) return [];
+    const { data, error } = await sb.from(table).select('*').eq('user_id', currentUser.id);
+    if (error) { console.error(error); return []; }
+    return data || [];
+  },
+  async getOne(table, idField, idValue) {
+    if (!sb || !currentUser) return null;
+    const { data, error } = await sb.from(table)
+      .select('*').eq('user_id', currentUser.id).eq(idField, idValue).maybeSingle();
+    if (error) { console.error(error); return null; }
+    return data;
+  },
+  async upsert(table, record, onConflict) {
+    if (!sb || !currentUser) return null;
+    record.user_id = currentUser.id;
+    const opts = onConflict ? { onConflict } : {};
+    const { data, error } = await sb.from(table).upsert(record, opts).select();
+    if (error) throw error;
+    return data;
+  },
+  async delete(table, idField, idValue) {
+    if (!sb || !currentUser) return;
+    await sb.from(table).delete().eq('user_id', currentUser.id).eq(idField, idValue);
+  }
+};
+
+// ==================== STATE ====================
+let state = {
+  todayChecklist: null,
+  trades: [],
+  checklistHistory: [],
+  dayReviews: [],
+  settings: { maxTrades: 3, dailyLoss: 500, riskPerTrade: 1, breakevenThreshold: 5, customInstruments: [] }
+};
+
+const today = () => new Date().toISOString().split('T')[0];
+
+// ==================== TRADE CLASSIFICATION ====================
+// Treat trades within ±breakevenThreshold as breakeven (not win or loss)
+// ==================== LABEL TRANSLATIONS ====================
+// Map technical codes to human-readable labels for display in insights
+const LABEL_TRANSLATIONS = {
+  // Setup types
+  'break-retest': 'Break & Retest',
+  'reversal': 'Reversal',
+  'in-range': 'In Range',
+  'vwap-bounce': 'VWAP Bounce',
+  'orb': 'Opening Range Breakout',
+  'hod-lod-breakout': 'HOD/LOD Breakout',
+  // Improvement reasons
+  'setup_correct': 'Setup was correct',
+  'entry_too_early': 'Entry te vroeg',
+  'entry_too_late': 'Entry te laat',
+  'sl_too_tight': 'SL te strak',
+  'sl_moved_too_fast': 'SL te snel opgeschoven',
+  'tp_too_fast': 'TP te snel gepakt',
+  'tp_too_far': 'TP te ver weg',
+  // Level
+  'YH': 'Yesterday High',
+  'YL': 'Yesterday Low',
+  'AsiaH': 'Asia High',
+  'AsiaL': 'Asia Low',
+  'LondonH': 'London High',
+  'LondonL': 'London Low',
+  'other_key': 'Ander key level',
+  'none': 'Geen level',
+  // Level precision
+  'exact': 'Exact op level',
+  'near': 'In de buurt',
+  'far': 'Niet bij level',
+  // Indices
+  'ja': 'Ja',
+  'nee': 'Nee',
+  'mixed': 'Gemengd',
+  'not_checked': 'Niet bekeken',
+  // Timeframe
+  '1min': '1 min',
+  '2min': '2 min',
+  '3min': '3 min',
+  '5min': '5 min',
+  '15min': '15 min',
+  // Stopped out
+  'went_after': 'Uitgetikt, trade vertrok daarna',
+  'never_worked': 'Uitgetikt, trade werkte nooit',
+  'not_applicable': 'Niet van toepassing',
+  'manual_went_after': 'Te vroeg gesloten, trade vertrok daarna alsnog',
+  'manual_never_worked': 'Terecht gesloten, trade werkte nooit',
+  'manual_na': 'Niet gevoelsmatig gesloten',
+  // EMA/VWAP influence
+  'positive': 'Positief (werkte)',
+  'negative': 'Negatief (faalde)',
+  'neutral': 'Geen invloed',
+  // Exit strategy
+  '2R_secured': '2R gepakt',
+  'trailed_sl': 'SL mee verschoven (+2R)',
+  'manual_exit': 'Handmatig gesloten',
+  'stopped_out': 'Stoploss geraakt',
+  'full_target': 'Volledige target',
+  // ATR
+  'nvt': 'N/A'
+};
+
+function translateLabel(value) {
+  if (!value && value !== 0) return value;
+  return LABEL_TRANSLATIONS[value] !== undefined ? LABEL_TRANSLATIONS[value] : value;
+}
+
+// Calculate R-multiple: how many R did this trade make?
+// R = risk per share = |entry - stop|. Result is in R-units.
+// Long: profit/risk where profit = exit - entry, risk = entry - stop
+// Short: profit = entry - exit, risk = stop - entry
+function getRMultiple(trade) {
+  if (!trade) return null;
+  const entry = parseFloat(trade.entry);
+  const exit = parseFloat(trade.exit);
+  const stop = parseFloat(trade.stop);
+  if (!isFinite(entry) || !isFinite(exit) || !isFinite(stop)) return null;
+  const risk = Math.abs(entry - stop);
+  if (risk === 0) return null;
+  let profit;
+  if (trade.direction === 'short') {
+    profit = entry - exit;
+  } else {
+    profit = exit - entry;
+  }
+  return profit / risk;
+}
+
+// Did this trade hit 2R during its lifetime? Uses the touched2R flag the user logged.
+function touched2R(trade) {
+  return trade && trade.touched2R === true;
+}
+
+function getBreakevenThreshold() {
+  return state.settings && state.settings.breakevenThreshold !== undefined 
+    ? state.settings.breakevenThreshold 
+    : 5;
+}
+
+// Calculate the trade outcome in POINTS (entry vs exit prijs), with sign based on direction.
+// Returns null if entry/exit not both filled — those trades are excluded from edge metrics.
+function getPoints(trade) {
+  if (!trade) return null;
+  const entry = parseFloat(trade.entry);
+  const exit = parseFloat(trade.exit);
+  if (!isFinite(entry) || !isFinite(exit)) return null;
+  // Long: profit when exit > entry. Short: profit when exit < entry.
+  if (trade.direction === 'short') {
+    return entry - exit;
+  }
+  return exit - entry;
+}
+
+// Returns true if trade has usable points data (entry + exit both set)
+function hasPoints(trade) {
+  return getPoints(trade) !== null;
+}
+
+function isWin(trade) {
+  return trade.pnl > getBreakevenThreshold();
+}
+
+function isLoss(trade) {
+  return trade.pnl < -getBreakevenThreshold();
+}
+
+function isBreakeven(trade) {
+  const t = getBreakevenThreshold();
+  return trade.pnl >= -t && trade.pnl <= t;
+}
+
+function classifyTrade(trade) {
+  if (isWin(trade)) return 'win';
+  if (isLoss(trade)) return 'loss';
+  return 'breakeven';
+}
+
+// ==================== STORAGE FUNCTIONS ====================
+async function loadAllData() {
+  if (!sb || !currentUser) return;
+  
+  state.trades = [];
+  state.checklistHistory = [];
+  state.dayReviews = [];
+  state.todayChecklist = null;
+  
+  try {
+    // Load trades
+    const trades = await cloudStorage.getAll('trades');
+    state.trades = trades.map(t => ({ ...t, ...(t.data || {}) }));
+    state.trades.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+    
+    // Load checklists
+    const checklists = await cloudStorage.getAll('checklists');
+    state.checklistHistory = checklists.map(c => ({ ...c, ...(c.data || {}) }));
+    state.checklistHistory.sort((a, b) => b.date.localeCompare(a.date));
+    state.todayChecklist = state.checklistHistory.find(c => c.date === today()) || null;
+    
+    // Load reviews
+    const reviews = await cloudStorage.getAll('reviews');
+    state.dayReviews = reviews.map(r => ({ ...r, ...(r.data || {}) }));
+    
+    // Load settings
+    const settings = await cloudStorage.getOne('settings', 'user_id', currentUser.id);
+    if (settings && settings.data) state.settings = settings.data;
+    
+  } catch (err) {
+    console.error('Load error:', err);
+    showToast('Fout bij laden: ' + err.message, true);
+  }
+}
+
+// ==================== CHECKLIST ====================
+function renderChecklist() {
+  const container = document.getElementById('checklistItems');
+  const groups = {
+    critical: { title: 'Kritieke factoren (5 ptn elk - deal-breakers)', items: [] },
+    medium: { title: 'Middelzware factoren (3 ptn elk)', items: [] },
+    light: { title: 'Lichte factoren (1 pt elk)', items: [] }
+  };
+  
+  CHECKLIST_ITEMS.forEach(item => groups[item.group].items.push(item));
+  
+  let html = '';
+  for (const [g, data] of Object.entries(groups)) {
+    const totalPoints = data.items.reduce((s, i) => s + i.points, 0);
+    html += `<div class="checklist-group">
+      <div class="group-header">
+        <span class="group-title">${data.title}</span>
+        <span class="group-weight">Max: ${totalPoints} ptn</span>
+      </div>`;
+    
+    data.items.forEach(item => {
+      const checked = state.todayChecklist && state.todayChecklist.checks[item.id] ? 'checked' : '';
+      html += `<div class="check-item ${item.group}" onclick="toggleCheck('${item.id}', event)">
+        <input type="checkbox" id="check-${item.id}" ${checked} onclick="event.stopPropagation(); toggleCheck('${item.id}', event)">
+        <label for="check-${item.id}">${item.label}</label>
+        <span class="check-points">+${item.points}</span>
+      </div>`;
+    });
+    html += '</div>';
+  }
+  
+  container.innerHTML = html;
+  updateScore();
+  updateTodayChecklistInfo();
+}
+
+function toggleCheck(id, event) {
+  if (event && event.target.tagName !== 'INPUT') {
+    const cb = document.getElementById(`check-${id}`);
+    cb.checked = !cb.checked;
+  }
+  
+  // Special handling: strategic_reminder opens the reminder modal when checked
+  if (id === 'strategic_reminder') {
+    const cb = document.getElementById(`check-${id}`);
+    if (cb && cb.checked) {
+      // Uncheck immediately - will re-check when modal completes
+      cb.checked = false;
+      openReminderModal();
+      return;
+    }
+  }
+  
+  updateScore();
+}
+
+function updateScore() {
+  let score = 0;
+  let criticalFailed = false;
+  let criticalFailedNames = [];
+  
+  CHECKLIST_ITEMS.forEach(item => {
+    const cb = document.getElementById(`check-${item.id}`);
+    if (cb && cb.checked) {
+      score += item.points;
+    } else if (item.deal_breaker) {
+      criticalFailed = true;
+      criticalFailedNames.push(item.label);
+    }
+  });
+  
+  const display = document.getElementById('scoreDisplay');
+  const numEl = document.getElementById('scoreNumber');
+  const labelEl = document.getElementById('scoreLabel');
+  const adviceEl = document.getElementById('scoreAdvice');
+  
+  numEl.textContent = `${score} / ${MAX_SCORE}`;
+  
+  display.classList.remove('go', 'caution', 'nogo');
+  
+  if (criticalFailed) {
+    display.classList.add('nogo');
+    labelEl.textContent = '🚫 GEEN LIVE TRADING';
+    adviceEl.innerHTML = `Kritieke factor gefaald: <strong>${criticalFailedNames.join(', ')}</strong>. Eén kritieke faal = stop, ongeacht totaalscore.`;
+  } else if (score < 30) {
+    display.classList.add('nogo');
+    labelEl.textContent = '🚫 GEEN TRADING VANDAAG';
+    adviceEl.textContent = `Score onder 30. Werk aan de basis vandaag, geen trading.`;
+  } else if (score < 40) {
+    display.classList.add('caution');
+    labelEl.textContent = '⚠️ TRADEN MET HALVE RISK UNIT';
+    adviceEl.textContent = `Score ${score}/${MAX_SCORE}. Live mag, maar verklein je risico per trade tot 50% (halve risk unit).`;
+  } else {
+    display.classList.add('go');
+    labelEl.textContent = '✅ LIVE TRADING OK';
+    adviceEl.textContent = `Score ${score}/${MAX_SCORE}. Volg je plan, respecteer je limieten.`;
+  }
+}
+
+async function saveChecklist() {
+  // Confirmation if a checklist already exists for today
+  if (state.todayChecklist) {
+    if (!confirm('Er bestaat al een ingevulde checklist voor vandaag. Wil je deze overschrijven?')) {
+      return;
+    }
+  }
+  
+  const checks = {};
+  let score = 0;
+  let criticalFailed = false;
+  
+  CHECKLIST_ITEMS.forEach(item => {
+    const cb = document.getElementById(`check-${item.id}`);
+    checks[item.id] = cb.checked;
+    if (cb.checked) score += item.points;
+    else if (item.deal_breaker) criticalFailed = true;
+  });
+  
+  const checklist = {
+    date: today(),
+    timestamp: new Date().toISOString(),
+    checks,
+    score,
+    maxScore: MAX_SCORE,
+    criticalFailed,
+    status: criticalFailed || score < 30 ? 'no-trade' : score < 40 ? 'live-half-size' : 'live-full'
+  };
+  
+  try {
+    await cloudStorage.upsert('checklists', { date: today(), data: checklist }, 'user_id,date');
+    state.todayChecklist = checklist;
+    
+    // Update history
+    state.checklistHistory = state.checklistHistory.filter(c => c.date !== today());
+    state.checklistHistory.unshift(checklist);
+    
+    showToast('Checklist opgeslagen voor vandaag');
+    updateTodayChecklistInfo();
+    updateTradeWarning();
+  } catch (err) {
+    showToast('Fout bij opslaan: ' + err.message, true);
+  }
+}
+
+function updateTodayChecklistInfo() {
+  const el = document.getElementById('todayChecklistInfo');
+  if (state.todayChecklist) {
+    const t = new Date(state.todayChecklist.timestamp);
+    el.innerHTML = `Laatst opgeslagen: ${t.toLocaleTimeString('nl-BE', {hour:'2-digit', minute:'2-digit'})} - Status: <strong>${state.todayChecklist.status}</strong>`;
+  } else {
+    el.textContent = 'Nog niet opgeslagen voor vandaag.';
+  }
+}
+
+// ==================== STRATEGY CHECKLIST RENDERING ====================
+function renderStrategies() {
+  const container = document.getElementById('strategiesContent');
+  if (!container) return;
+  
+  let html = '';
+  Object.entries(STRATEGY_CHECKLISTS).forEach(([key, strategy]) => {
+    html += `<div class="card" style="background:#0f172a; padding:18px; margin-bottom:16px;">`;
+    html += `<h3 style="margin-top:0; color:#f1f5f9; margin-bottom:6px;">${strategy.name}</h3>`;
+    html += `<div style="font-size:13px; color:#94a3b8; margin-bottom:14px; font-style:italic;">${strategy.description}</div>`;
+    
+    strategy.sections.forEach(section => {
+      const color = section.critical ? '#ef4444' : '#f59e0b';
+      const tag = section.critical ? '<span style="color:#ef4444; font-size:10px; margin-left:8px; padding:2px 6px; background:rgba(239,68,68,0.15); border-radius:3px;">KRITIEK</span>' : '';
+      html += `<div style="margin-top:14px; padding-top:12px; border-top:1px solid #1e293b;">`;
+      html += `<div style="font-weight:600; color:#cbd5e1; margin-bottom:8px; font-size:14px;">${section.title}${tag}</div>`;
+      section.items.forEach(item => {
+        html += `<div style="display:flex; gap:10px; padding:4px 0; align-items:flex-start;">
+          <span style="color:${color}; font-size:14px; line-height:1.5;">•</span>
+          <span style="font-size:13px; color:#e2e8f0; line-height:1.5;">${item}</span>
+        </div>`;
+      });
+      html += `</div>`;
+    });
+    
+    html += `</div>`;
+  });
+  
+  container.innerHTML = html;
+}
+
+function renderStrategyChecklist() {
+  const setup = document.getElementById('tradeSetup').value;
+  const container = document.getElementById('strategyChecklistContainer');
+  
+  if (!setup || !STRATEGY_CHECKLISTS[setup]) {
+    container.innerHTML = '<div class="info-box" style="margin-top:16px;">💡 Kies een setup-type hierboven om de strategie-specifieke checklist te zien.</div>';
+    return;
+  }
+  
+  const strategy = STRATEGY_CHECKLISTS[setup];
+  let html = `<h3>Strategie Checklist: ${strategy.name}</h3>`;
+  html += `<div class="info-box">${strategy.description}</div>`;
+  html += '<div class="info-box" style="background:#1e3a8a;">📋 <strong>Vergeet niet:</strong> de algemene Pre-Trade Check (apart tabblad) doe je vóór deze strategie-checklist.</div>';
+  
+  // Strategy-specific sections
+  strategy.sections.forEach((section, si) => {
+    const borderColor = section.critical ? '#ef4444' : '#f59e0b';
+    const groupClass = section.critical ? 'critical' : 'medium';
+    html += `<div class="card" style="background:#0f172a; padding:16px; margin-bottom:12px; border-left:3px solid ${borderColor};">`;
+    html += `<div style="font-weight:600; margin-bottom:10px; color:#f1f5f9;">${section.title} ${section.critical ? '<span style="color:#ef4444; font-size:11px; margin-left:8px;">KRITIEK</span>' : ''}</div>`;
+    section.items.forEach((item, ii) => {
+      const id = `s${si}-i${ii}`;
+      html += `<div class="check-item ${groupClass}" onclick="toggleStrategyCheck('${id}', event)" style="margin-bottom:4px;">
+        <input type="checkbox" id="strat-${id}" data-strategy="${setup}" data-critical="${section.critical}" onclick="event.stopPropagation(); updateStrategyScore();">
+        <label for="strat-${id}">${item}</label>
+      </div>`;
+    });
+    html += '</div>';
+  });
+  
+  html += '<div id="strategyScoreInfo" style="margin-top:12px; padding:14px; border-radius:8px; font-size:14px;"></div>';
+  container.innerHTML = html;
+  updateStrategyScore();
+}
+
+function toggleStrategyCheck(id, event) {
+  if (event && event.target.tagName !== 'INPUT') {
+    const cb = document.getElementById(`strat-${id}`);
+    if (cb) cb.checked = !cb.checked;
+    updateStrategyScore();
+  }
+}
+
+function updateStrategyScore() {
+  const setup = document.getElementById('tradeSetup').value;
+  const infoEl = document.getElementById('strategyScoreInfo');
+  if (!infoEl) return;
+  
+  const allChecks = document.querySelectorAll('input[id^="strat-"]');
+  const total = allChecks.length;
+  let checked = 0;
+  let criticalTotal = 0;
+  let criticalChecked = 0;
+  let universalTotal = 0;
+  let universalChecked = 0;
+  
+  allChecks.forEach(cb => {
+    if (cb.checked) checked++;
+    if (cb.dataset.strategy === 'universal') {
+      universalTotal++;
+      if (cb.checked) universalChecked++;
+    }
+    if (cb.dataset.critical === 'true') {
+      criticalTotal++;
+      if (cb.checked) criticalChecked++;
+    }
+  });
+  
+  const pct = total > 0 ? (checked / total * 100) : 0;
+  const critPct = criticalTotal > 0 ? (criticalChecked / criticalTotal * 100) : 100;
+  
+  let bgColor, msg;
+  if (critPct < 80 || pct < 60) {
+    bgColor = 'linear-gradient(135deg, #991b1b, #b91c1c)';
+    msg = `🚫 NIET TRADEN. Kritieke checks: ${criticalChecked}/${criticalTotal} (${critPct.toFixed(0)}%). Totaal: ${checked}/${total} (${pct.toFixed(0)}%). Te veel ontbreekt.`;
+  } else if (critPct < 100 || pct < 80) {
+    bgColor = 'linear-gradient(135deg, #92400e, #b45309)';
+    msg = `⚠️ TWIJFEL. Kritieke: ${criticalChecked}/${criticalTotal} (${critPct.toFixed(0)}%). Totaal: ${checked}/${total} (${pct.toFixed(0)}%). Overweeg te skippen of halve size.`;
+  } else {
+    bgColor = 'linear-gradient(135deg, #065f46, #047857)';
+    msg = `✅ SETUP COMPLEET. Alle ${criticalTotal} kritieke checks ✓. Totaal: ${checked}/${total} (${pct.toFixed(0)}%). Trade volgens plan.`;
+  }
+  infoEl.style.background = bgColor;
+  infoEl.style.color = 'white';
+  infoEl.innerHTML = msg;
+}
+
+function getStrategyChecklistData() {
+  const checks = {};
+  document.querySelectorAll('input[id^="strat-"]').forEach(cb => {
+    const label = document.querySelector(`label[for="${cb.id}"]`);
+    if (label) checks[label.textContent] = cb.checked;
+  });
+  return checks;
+}
+
+// ==================== PRE-TRADE CHECK FUNCTIONS ====================
+let currentPreTradeCheck = {};
+
+function renderPreTradeCheck() {
+  const container = document.getElementById('preTradeChecksContainer');
+  if (!container) return;
+  
+  const generalChecks = PRE_TRADE_CHECKS.filter(c => c.section === 'general');
+  const perTradeChecks = PRE_TRADE_CHECKS.filter(c => c.section === 'per_trade');
+  
+  let html = '';
+  
+  // General section
+  html += '<h3 style="margin-top:0; color:#f1f5f9;">📋 Algemeen (strategische reminder)</h3>';
+  html += '<div class="info-box">Deze punten doorloop je <strong>vóór</strong> de sessie start. Wanneer je in de Pre-Market Checklist het vinkje "strategische reminder gelezen" aanvinkt, verschijnt een popup waarin je deze punten actief moet bevestigen.</div>';
+  html += '<div class="card" style="background:#0f172a; padding:18px; margin-bottom:16px;">';
+  generalChecks.forEach(check => {
+    const tag = check.critical ? '<span style="color:#ef4444; font-size:10px; margin-left:8px; padding:2px 6px; background:rgba(239,68,68,0.15); border-radius:3px;">KRITIEK</span>' : '';
+    html += `<div style="padding:10px 0; border-bottom:1px solid #1e293b;">
+      <div style="display:flex; align-items:flex-start; gap:10px;">
+        <span style="color:#ef4444; font-size:18px; line-height:1;">•</span>
+        <div style="flex:1;">
+          <div style="font-weight:600; color:#f1f5f9; margin-bottom:4px;">${check.label}${tag}</div>
+          <div style="font-size:12px; color:#94a3b8; line-height:1.4;">${check.detail}</div>
+        </div>
+      </div>
+    </div>`;
+  });
+  html += '</div>';
+  
+  // Per-trade section
+  html += '<h3 style="margin-top:24px; color:#f1f5f9;">⚡ Per Trade (vlak voor instappen)</h3>';
+  html += '<div class="info-box">Loop deze door net voor je een trade plaatst.</div>';
+  html += '<div class="card" style="background:#0f172a; padding:18px;">';
+  perTradeChecks.forEach(check => {
+    html += `<div style="padding:10px 0; border-bottom:1px solid #1e293b;">
+      <div style="display:flex; align-items:flex-start; gap:10px;">
+        <span style="color:#f59e0b; font-size:18px; line-height:1;">•</span>
+        <div style="flex:1;">
+          <div style="font-weight:600; color:#f1f5f9; margin-bottom:4px;">${check.label}</div>
+          <div style="font-size:12px; color:#94a3b8; line-height:1.4;">${check.detail}</div>
+        </div>
+      </div>
+    </div>`;
+  });
+  html += '</div>';
+  
+  container.innerHTML = html;
+}
+
+function togglePreTradeCheck(id, event) {
+  if (event && event.target.tagName !== 'INPUT') {
+    const cb = document.getElementById(`pt-${id}`);
+    if (cb) cb.checked = !cb.checked;
+  }
+  const cb = document.getElementById(`pt-${id}`);
+  currentPreTradeCheck[id] = cb.checked;
+  updatePreTradeScore();
+}
+
+function updatePreTradeScore() {
+  const total = PRE_TRADE_CHECKS.length;
+  let checked = 0;
+  let criticalTotal = 0;
+  let criticalChecked = 0;
+  let criticalMissing = [];
+  
+  PRE_TRADE_CHECKS.forEach(c => {
+    const isChecked = !!currentPreTradeCheck[c.id];
+    if (isChecked) checked++;
+    if (c.critical) {
+      criticalTotal++;
+      if (isChecked) criticalChecked++;
+      else criticalMissing.push(c.label);
+    }
+  });
+  
+  const pct = (checked / total * 100).toFixed(0);
+  const critPct = (criticalChecked / criticalTotal * 100).toFixed(0);
+  const infoEl = document.getElementById('preTradeScoreInfo');
+  if (!infoEl) return;
+  
+  let bg, msg;
+  if (criticalChecked < criticalTotal) {
+    bg = 'linear-gradient(135deg, #991b1b, #b91c1c)';
+    msg = `🚫 NIET TRADEN. Kritieke checks ontbreken (${criticalChecked}/${criticalTotal}):<br><br>` +
+          criticalMissing.map(m => `• ${m}`).join('<br>');
+  } else if (checked < total - 2) {
+    bg = 'linear-gradient(135deg, #92400e, #b45309)';
+    msg = `⚠️ TWIJFEL. Alle kritieke checks ✓ maar nog veel niet-kritieke open (${checked}/${total}). Overweeg halve size.`;
+  } else {
+    bg = 'linear-gradient(135deg, #065f46, #047857)';
+    msg = `✅ TRADE OK. ${checked}/${total} checks voldaan, alle ${criticalTotal} kritieke ✓.`;
+  }
+  
+  infoEl.style.background = bg;
+  infoEl.style.color = 'white';
+  infoEl.innerHTML = msg;
+}
+
+function resetPreTradeCheck() {
+  currentPreTradeCheck = {};
+  renderPreTradeCheck();
+  showToast('Pre-Trade Check gereset');
+}
+
+function getPreTradeCheckData() {
+  // Return current state of pre-trade checks for saving with trade
+  const result = {};
+  PRE_TRADE_CHECKS.forEach(c => {
+    result[c.label] = !!currentPreTradeCheck[c.id];
+  });
+  result._criticalCount = PRE_TRADE_CHECKS.filter(c => c.critical && currentPreTradeCheck[c.id]).length;
+  result._criticalTotal = PRE_TRADE_CHECKS.filter(c => c.critical).length;
+  result._totalChecked = PRE_TRADE_CHECKS.filter(c => currentPreTradeCheck[c.id]).length;
+  result._totalChecks = PRE_TRADE_CHECKS.length;
+  return result;
+}
+
+// ==================== SCREENSHOT HANDLING ====================
+let currentScreenshots = [null, null]; // [slot1, slot2]
+let editingTradeId = null; // null = new trade, otherwise editing existing trade
+
+function calculateDurationMinutes(startStr, endStr) {
+  if (!startStr || !endStr) return null;
+  const [sh, sm] = startStr.split(':').map(Number);
+  const [eh, em] = endStr.split(':').map(Number);
+  if (isNaN(sh) || isNaN(sm) || isNaN(eh) || isNaN(em)) return null;
+  let mins = (eh * 60 + em) - (sh * 60 + sm);
+  // If exit before entry, assume crossed midnight (rare for daytrading but safer)
+  if (mins < 0) mins += 24 * 60;
+  return mins;
+}
+
+function formatDuration(mins) {
+  if (mins === null || mins === undefined) return '— min';
+  if (mins < 60) return `${mins} min`;
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  return `${h}u ${m}min`;
+}
+
+function updateTradeDuration() {
+  const entryTime = document.getElementById('tradeExactTime').value;
+  const exitTime = document.getElementById('tradeExitTime').value;
+  const display = document.getElementById('tradeDurationDisplay');
+  if (!display) return;
+  const mins = calculateDurationMinutes(entryTime, exitTime);
+  if (mins !== null) {
+    display.textContent = formatDuration(mins);
+    display.style.color = '#60a5fa';
+  } else {
+    display.textContent = '— min';
+    display.style.color = '#94a3b8';
+  }
+}
+
+function toggleMentorNameField() {
+  const select = document.getElementById('evalMentorFollowed');
+  const group = document.getElementById('mentorNameGroup');
+  if (select.value === 'ja') {
+    group.style.display = 'flex';
+  } else {
+    group.style.display = 'none';
+    document.getElementById('evalMentorName').value = '';
+  }
+}
+
+function handleScreenshotUpload(event, slot) {
+  const file = event.target.files[0];
+  if (!file) return;
+  if (!file.type.startsWith('image/')) {
+    showToast('Alleen afbeeldingen zijn toegestaan', true);
+    return;
+  }
+  if (file.size > 4 * 1024 * 1024) {
+    showToast('Afbeelding te groot (max 4MB). Verklein voor uploaden.', true);
+    return;
+  }
+  const reader = new FileReader();
+  reader.onload = (e) => setScreenshot(e.target.result, slot);
+  reader.readAsDataURL(file);
+}
+
+function setScreenshot(base64, slot) {
+  if (slot === 1) currentScreenshots[0] = base64;
+  else if (slot === 2) currentScreenshots[1] = base64;
+  else return;
+  
+  const preview = document.getElementById('screenshotPreview' + slot);
+  const placeholder = document.getElementById('screenshotPlaceholder' + slot);
+  const removeBtn = document.getElementById('screenshotRemoveBtn' + slot);
+  preview.src = base64;
+  preview.style.display = 'block';
+  placeholder.style.display = 'none';
+  removeBtn.style.display = 'inline-block';
+}
+
+function removeScreenshot(slot) {
+  if (slot === 1) currentScreenshots[0] = null;
+  else if (slot === 2) currentScreenshots[1] = null;
+  else {
+    // Called with no args = clear all (used by clearTradeForm)
+    currentScreenshots = [null, null];
+    [1, 2].forEach(s => {
+      const preview = document.getElementById('screenshotPreview' + s);
+      const placeholder = document.getElementById('screenshotPlaceholder' + s);
+      const removeBtn = document.getElementById('screenshotRemoveBtn' + s);
+      const input = document.getElementById('tradeScreenshotInput' + s);
+      if (preview) { preview.src = ''; preview.style.display = 'none'; }
+      if (placeholder) placeholder.style.display = 'block';
+      if (removeBtn) removeBtn.style.display = 'none';
+      if (input) input.value = '';
+    });
+    return;
+  }
+  
+  const preview = document.getElementById('screenshotPreview' + slot);
+  const placeholder = document.getElementById('screenshotPlaceholder' + slot);
+  const removeBtn = document.getElementById('screenshotRemoveBtn' + slot);
+  const input = document.getElementById('tradeScreenshotInput' + slot);
+  preview.src = '';
+  preview.style.display = 'none';
+  placeholder.style.display = 'block';
+  removeBtn.style.display = 'none';
+  if (input) input.value = '';
+}
+
+function showTradeScreenshot(tradeId) {
+  const trade = state.trades.find(t => t.id === tradeId);
+  if (!trade) return;
+  
+  const modal = document.getElementById('screenshotViewerModal');
+  const caption = document.getElementById('screenshotViewerCaption');
+  const imagesEl = document.getElementById('screenshotViewerImages');
+  const detailsEl = document.getElementById('screenshotViewerDetails');
+  
+  // Caption
+  const d = new Date(trade.timestamp);
+  const pnlClass = trade.pnl >= 0 ? 'pnl-positive' : 'pnl-negative';
+  caption.innerHTML = `${trade.instrument} ${trade.direction.toUpperCase()} · ${d.toLocaleDateString('nl-BE')} ${trade.exactTime || ''} · <span class="${pnlClass}">€${trade.pnl.toFixed(2)}</span>`;
+  
+  // Collect screenshots (new array format OR legacy single field)
+  let screenshots = [];
+  if (Array.isArray(trade.screenshots) && trade.screenshots.length > 0) {
+    screenshots = trade.screenshots.filter(s => s);
+  } else if (trade.screenshot) {
+    screenshots = [trade.screenshot];
+  }
+  
+  // Render images grid
+  if (screenshots.length === 0) {
+    imagesEl.innerHTML = '<div style="color:#64748b; padding:20px; text-align:center; background:#1e293b; border-radius:8px;">Geen screenshots bij deze trade.</div>';
+  } else {
+    const gridCols = screenshots.length === 1 ? '1fr' : 'repeat(auto-fit, minmax(400px, 1fr))';
+    imagesEl.style.gridTemplateColumns = gridCols;
+    let html = '';
+    screenshots.forEach((src, i) => {
+      html += `<div style="background:#0f172a; padding:8px; border-radius:8px;">
+        <div style="font-size:12px; color:#94a3b8; margin-bottom:6px;">Screenshot ${i + 1}</div>
+        <img src="${src}" style="max-width:100%; max-height:70vh; border-radius:4px; display:block; margin:0 auto;">
+      </div>`;
+    });
+    imagesEl.innerHTML = html;
+  }
+  
+  // Details: setup, reason, lessons, improvement
+  let detailsHtml = '';
+  const addRow = (label, value) => {
+    if (value) detailsHtml += `<div style="margin-bottom:10px;"><strong style="color:#94a3b8; font-size:12px; text-transform:uppercase; letter-spacing:0.5px;">${label}</strong><div style="margin-top:4px;">${value}</div></div>`;
+  };
+  addRow('Setup', trade.setup ? translateLabel(trade.setup) : null);
+  addRow('Waarom deze trade / wat zag je', trade.reason);
+  addRow('Lessen / observaties', trade.lessons);
+  if (trade.improvement) addRow('Verbeterpunt', translateLabel(trade.improvement));
+  if (trade.durationMinutes !== null && trade.durationMinutes !== undefined) {
+    addRow('Duur', formatDuration(trade.durationMinutes));
+  }
+  if (trade.planFollowed) addRow('Plan gevolgd', trade.planFollowed);
+  // R-multiple and touched2R
+  const tradeR = getRMultiple(trade);
+  if (tradeR !== null) addRow('Resultaat (R)', `${tradeR>=0?'+':''}${tradeR.toFixed(2)}R`);
+  if (trade.touched2R) addRow('2R aangeraakt', 'Ja');
+  
+  // Trade analyse velden (niet afleidbaar uit screenshot)
+  const ev = trade.evaluation || {};
+  if (ev.dailyTrend) addRow('Mee met daily trend', translateLabel(ev.dailyTrend));
+  if (ev.indices) addRow('Indexen in de rug', translateLabel(ev.indices));
+  if (ev.stoppedOut) addRow('Indien uitgetikt', translateLabel(ev.stoppedOut));
+  if (ev.manualClose) addRow('Indien gevoelsmatig afgesloten', translateLabel(ev.manualClose));
+  if (ev.mentorFollowed) {
+    const mentorVal = ev.mentorFollowed === 'ja' && ev.mentorName 
+      ? `Ja — ${ev.mentorName}` 
+      : translateLabel(ev.mentorFollowed);
+    addRow('Mentor gevolgd', mentorVal);
+  }
+  
+  detailsEl.innerHTML = detailsHtml || '<div style="color:#64748b;">Geen notities bij deze trade.</div>';
+  
+  // Action buttons
+  const actionsEl = document.getElementById('screenshotViewerActions');
+  if (actionsEl) {
+    actionsEl.innerHTML = `
+      <button class="secondary" onclick="closeScreenshotViewer(); editTrade('${trade.id}')">✏️ Bewerken</button>
+    `;
+  }
+  
+  modal.style.display = 'block';
+}
+
+function closeScreenshotViewer(event) {
+  // Only close if clicking on the backdrop, not on content inside
+  if (event && event.target.id !== 'screenshotViewerModal' && event.type === 'click') {
+    // Click came from inside; was the X button clicked? It calls without event arg
+    if (event.target.tagName !== 'BUTTON') return;
+  }
+  document.getElementById('screenshotViewerModal').style.display = 'none';
+}
+
+function setupPasteHandler() {
+  document.addEventListener('paste', (event) => {
+    // Only handle when on Trade Logging panel
+    const tradesPanel = document.getElementById('panel-trades');
+    if (!tradesPanel || !tradesPanel.classList.contains('active')) return;
+    
+    const items = (event.clipboardData || event.originalEvent?.clipboardData)?.items;
+    if (!items) return;
+    
+    for (const item of items) {
+      if (item.type.startsWith('image/')) {
+        const blob = item.getAsFile();
+        if (!blob) continue;
+        if (blob.size > 4 * 1024 * 1024) {
+          showToast('Geplakte afbeelding te groot (max 4MB)', true);
+          return;
+        }
+        // Determine first empty slot
+        const slot = currentScreenshots[0] === null ? 1 : currentScreenshots[1] === null ? 2 : null;
+        if (slot === null) {
+          showToast('Beide screenshot-slots zijn vol. Verwijder er eerst een.', true);
+          event.preventDefault();
+          return;
+        }
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          setScreenshot(e.target.result, slot);
+          showToast(`Screenshot geplakt in slot ${slot}`);
+        };
+        reader.readAsDataURL(blob);
+        event.preventDefault();
+        return;
+      }
+    }
+  });
+}
+
+// ==================== STRATEGIC REMINDER MODAL ====================
+function openReminderModal() {
+  const container = document.getElementById('reminderItemsContainer');
+  let html = '';
+  PRE_TRADE_CHECKS.forEach((check, i) => {
+    const sectionLabel = check.section === 'general' ? 'Algemeen' : 'Per Trade';
+    const sectionColor = check.section === 'general' ? '#ef4444' : '#f59e0b';
+    html += `<div class="card" style="background:#0f172a; padding:12px; margin-bottom:8px; border-left:3px solid ${sectionColor}; cursor:pointer;" onclick="toggleReminderItem(${i}, event)">
+      <div style="display:flex; align-items:flex-start; gap:10px;">
+        <input type="checkbox" id="reminder-item-${i}" onclick="event.stopPropagation(); updateReminderState();" style="margin-top:3px; width:18px; height:18px; accent-color:#3b82f6; cursor:pointer;">
+        <div style="flex:1;">
+          <div style="font-size:11px; color:${sectionColor}; font-weight:600; margin-bottom:3px;">${sectionLabel.toUpperCase()}</div>
+          <label for="reminder-item-${i}" style="font-weight:600; color:#f1f5f9; cursor:pointer; display:block; margin-bottom:3px; font-size:14px;">${check.label}</label>
+          <div style="font-size:12px; color:#94a3b8; line-height:1.4;">${check.detail}</div>
+        </div>
+      </div>
+    </div>`;
+  });
+  container.innerHTML = html;
+  document.getElementById('reminderModal').style.display = 'block';
+  updateReminderState();
+}
+
+function toggleReminderItem(i, event) {
+  if (event && event.target.tagName !== 'INPUT') {
+    const cb = document.getElementById(`reminder-item-${i}`);
+    if (cb) cb.checked = !cb.checked;
+  }
+  updateReminderState();
+}
+
+function updateReminderState() {
+  const total = PRE_TRADE_CHECKS.length;
+  let checked = 0;
+  for (let i = 0; i < total; i++) {
+    const cb = document.getElementById(`reminder-item-${i}`);
+    if (cb && cb.checked) checked++;
+  }
+  const btn = document.getElementById('reminderCloseBtn');
+  if (checked === total) {
+    btn.disabled = false;
+    btn.style.opacity = '1';
+    btn.textContent = 'Reminder gelezen — verder gaan';
+  } else {
+    btn.disabled = true;
+    btn.style.opacity = '0.5';
+    btn.textContent = `Vink alles aan om verder te gaan (${checked}/${total})`;
+  }
+}
+
+function closeReminderModal() {
+  // Verify all are checked
+  const total = PRE_TRADE_CHECKS.length;
+  for (let i = 0; i < total; i++) {
+    const cb = document.getElementById(`reminder-item-${i}`);
+    if (!cb || !cb.checked) return; // Should not happen, button is disabled
+  }
+  document.getElementById('reminderModal').style.display = 'none';
+  // Mark the strategic_reminder checkbox as checked
+  const reminderCb = document.getElementById('check-strategic_reminder');
+  if (reminderCb) {
+    reminderCb.checked = true;
+    updateScore();
+  }
+}
+
+function cancelReminderModal() {
+  // User canceled - leave strategic_reminder unchecked
+  const reminderCb = document.getElementById('check-strategic_reminder');
+  if (reminderCb) {
+    reminderCb.checked = false;
+    updateScore();
+  }
+  document.getElementById('reminderModal').style.display = 'none';
+}
+
+// ==================== INSTRUMENT HANDLING ====================
+function handleInstrumentChange() {
+  const select = document.getElementById('tradeInstrument');
+  const customInput = document.getElementById('tradeInstrumentCustom');
+  if (select.value === '__custom__') {
+    customInput.style.display = 'block';
+    customInput.focus();
+  } else {
+    customInput.style.display = 'none';
+    customInput.value = '';
+  }
+}
+
+function getInstrumentValue() {
+  const select = document.getElementById('tradeInstrument');
+  if (select.value === '__custom__') {
+    const customVal = document.getElementById('tradeInstrumentCustom').value.trim().toUpperCase();
+    if (customVal) {
+      // Add to known custom instruments if not already there
+      if (!state.settings.customInstruments) state.settings.customInstruments = [];
+      if (!state.settings.customInstruments.includes(customVal)) {
+        state.settings.customInstruments.push(customVal);
+        // Persist async (don't block save)
+        cloudStorage.upsert('settings', { user_id: currentUser.id, data: state.settings }, 'user_id').catch(e => console.error('Settings save failed:', e));
+        renderInstrumentOptions();
+      }
+      return customVal;
+    }
+    return 'CUSTOM';
+  }
+  return select.value;
+}
+
+function renderInstrumentOptions() {
+  const select = document.getElementById('tradeInstrument');
+  if (!select) return;
+  
+  const currentValue = select.value;
+  const customs = (state.settings && state.settings.customInstruments) || [];
+  
+  // Build the placeholder section with custom instruments
+  let customOptions = '';
+  customs.forEach(ci => {
+    customOptions += `<option value="${ci}">${ci}</option>`;
+  });
+  
+  select.innerHTML = `
+    <option value="DAX">DAX</option>
+    <option value="UK100">UK100</option>
+    <option value="XAU">XAU (Goud)</option>
+    <option value="US30">US30</option>
+    <option value="US100">US100</option>
+    <option value="US500">US500</option>
+    ${customOptions}
+    <option value="__custom__">+ Nieuw aandeel toevoegen...</option>
+    <option value="ander">Ander (eenmalig)</option>
+  `;
+  
+  // Restore previous selection if still valid
+  if (currentValue && Array.from(select.options).some(o => o.value === currentValue)) {
+    select.value = currentValue;
+  }
+}
+
+// ==================== TRADES ====================
+async function saveTrade() {
+  const pnl = parseFloat(document.getElementById('tradePnL').value) || 0;
+  const entry = parseFloat(document.getElementById('tradeEntry').value);
+  
+  if (!entry) {
+    showToast('Vul minimaal entry prijs en P&L in', true);
+    return;
+  }
+  
+  const existingTrade = editingTradeId ? state.trades.find(t => t.id === editingTradeId) : null;
+  
+  const trade = {
+    id: existingTrade ? existingTrade.id : `t_${Date.now()}_${Math.random().toString(36).substr(2,5)}`,
+    timestamp: existingTrade ? existingTrade.timestamp : new Date().toISOString(),
+    date: existingTrade ? existingTrade.date : today(),
+    instrument: getInstrumentValue(),
+    direction: document.getElementById('tradeDirection').value,
+    session: document.getElementById('tradeSession').value,
+    timeBlock: document.getElementById('tradeTimeBlock').value,
+    entry,
+    exit: parseFloat(document.getElementById('tradeExit').value) || null,
+    stop: parseFloat(document.getElementById('tradeStop').value) || null,
+    target: parseFloat(document.getElementById('tradeTarget').value) || null,
+    pnl,
+    size: parseFloat(document.getElementById('tradeSize').value) || 1,
+    setup: document.getElementById('tradeSetup').value,
+    planFollowed: document.getElementById('tradePlanFollowed').value,
+    improvement: document.getElementById('tradeImprovement').value,
+    touched2R: document.getElementById('evalTouched2R').checked,
+    evaluation: {
+      dailyTrend: document.getElementById('evalDailyTrend').value,
+      level: document.getElementById('evalLevel').value,
+      levelPrecision: document.getElementById('evalLevelPrecision').value,
+      indices: document.getElementById('evalIndices').value,
+      timeframe: document.getElementById('evalTimeframe').value,
+      hammer: document.getElementById('evalHammer').value,
+      stoppedOut: document.getElementById('evalStoppedOut').value,
+      manualClose: document.getElementById('evalManualClose').value,
+      vwap: document.getElementById('evalVwap').value,
+      exit: document.getElementById('evalExit').value,
+      atr: document.getElementById('evalAtr').value,
+      mentorFollowed: document.getElementById('evalMentorFollowed').value,
+      mentorName: document.getElementById('evalMentorName').value
+    },
+    exactTime: document.getElementById('tradeExactTime').value,
+    exitTime: document.getElementById('tradeExitTime').value,
+    durationMinutes: calculateDurationMinutes(
+      document.getElementById('tradeExactTime').value,
+      document.getElementById('tradeExitTime').value
+    ),
+    screenshot: currentScreenshots[0], // backwards-compatible primary
+    screenshots: [currentScreenshots[0], currentScreenshots[1]].filter(s => s !== null),
+    emotions: {
+      stress: parseInt(document.getElementById('emotionStress').value),
+      confidence: parseInt(document.getElementById('emotionConfidence').value),
+      fomo: parseInt(document.getElementById('emotionFomo').value),
+      frustration: parseInt(document.getElementById('emotionFrustration').value),
+      satisfaction: parseInt(document.getElementById('emotionSatisfaction').value)
+    },
+    reason: document.getElementById('tradeReason').value,
+    lessons: document.getElementById('tradeLessons').value,
+    checklistScore: existingTrade ? existingTrade.checklistScore : (state.todayChecklist ? state.todayChecklist.score : null),
+    checklistStatus: existingTrade ? existingTrade.checklistStatus : (state.todayChecklist ? state.todayChecklist.status : null),
+    strategyChecklist: getStrategyChecklistData(),
+    preTradeCheck: getPreTradeCheckData()
+  };
+  
+  try {
+    await cloudStorage.upsert('trades', { id: trade.id, data: trade });
+    if (existingTrade) {
+      // Replace in state
+      const idx = state.trades.findIndex(t => t.id === trade.id);
+      if (idx !== -1) state.trades[idx] = trade;
+      showToast('Trade bijgewerkt');
+      editingTradeId = null;
+      cancelEditMode();
+      // Go back to history to see the result
+      switchToPanel('history');
+      renderHistory();
+    } else {
+      state.trades.unshift(trade);
+      showToast('Trade opgeslagen');
+    }
+    clearTradeForm();
+    currentPreTradeCheck = {}; // Reset pre-trade check for next trade
+    renderTodayTrades();
+    updateTradeWarning();
+  } catch (err) {
+    showToast('Fout bij opslaan: ' + err.message, true);
+  }
+}
+
+function editTrade(tradeId) {
+  const trade = state.trades.find(t => t.id === tradeId);
+  if (!trade) return;
+  
+  editingTradeId = tradeId;
+  
+  // Switch to trade logging panel
+  switchToPanel('trades');
+  
+  // Fill the form with existing values
+  const setVal = (id, value) => { const el = document.getElementById(id); if (el) el.value = value !== undefined && value !== null ? value : ''; };
+  
+  // Instrument: check if it's a standard option, else use custom
+  const instrSelect = document.getElementById('tradeInstrument');
+  const standardInstruments = ['DAX', 'UK100', 'XAU', 'US30', 'US100', 'US500'];
+  const customs = (state.settings && state.settings.customInstruments) || [];
+  if (standardInstruments.includes(trade.instrument) || customs.includes(trade.instrument)) {
+    instrSelect.value = trade.instrument;
+    document.getElementById('tradeInstrumentCustom').style.display = 'none';
+  } else if (trade.instrument) {
+    instrSelect.value = '__custom__';
+    const customInput = document.getElementById('tradeInstrumentCustom');
+    customInput.style.display = 'block';
+    customInput.value = trade.instrument;
+  }
+  
+  setVal('tradeDirection', trade.direction);
+  setVal('tradeSession', trade.session);
+  setVal('tradeTimeBlock', trade.timeBlock);
+  setVal('tradeExactTime', trade.exactTime);
+  setVal('tradeExitTime', trade.exitTime);
+  updateTradeDuration();
+  setVal('tradeEntry', trade.entry);
+  setVal('tradeExit', trade.exit);
+  setVal('tradeStop', trade.stop);
+  setVal('tradeTarget', trade.target);
+  setVal('tradePnL', trade.pnl);
+  setVal('tradeSize', trade.size);
+  setVal('tradeSetup', trade.setup);
+  setVal('tradePlanFollowed', trade.planFollowed);
+  setVal('tradeImprovement', trade.improvement);
+  
+  // Evaluation fields
+  const ev = trade.evaluation || {};
+  setVal('evalDailyTrend', ev.dailyTrend);
+  setVal('evalLevel', ev.level);
+  setVal('evalLevelPrecision', ev.levelPrecision);
+  setVal('evalIndices', ev.indices);
+  setVal('evalTimeframe', ev.timeframe);
+  setVal('evalHammer', ev.hammer);
+  setVal('evalStoppedOut', ev.stoppedOut);
+  setVal('evalManualClose', ev.manualClose);
+  setVal('evalVwap', ev.vwap);
+  setVal('evalExit', ev.exit);
+  document.getElementById('evalTouched2R').checked = trade.touched2R === true;
+  setVal('evalAtr', ev.atr);
+  setVal('evalMentorFollowed', ev.mentorFollowed);
+  setVal('evalMentorName', ev.mentorName);
+  toggleMentorNameField();
+  
+  // Emotions
+  const em = trade.emotions || {};
+  const setSlider = (id, value, def) => {
+    const el = document.getElementById(id);
+    const valEl = document.getElementById(id + 'Val');
+    if (el) { el.value = value !== undefined ? value : def; if (valEl) valEl.textContent = el.value; }
+  };
+  setSlider('emotionStress', em.stress, 5);
+  setSlider('emotionConfidence', em.confidence, 5);
+  setSlider('emotionFomo', em.fomo, 3);
+  setSlider('emotionFrustration', em.frustration, 3);
+  setSlider('emotionSatisfaction', em.satisfaction, 5);
+  
+  setVal('tradeReason', trade.reason);
+  setVal('tradeLessons', trade.lessons);
+  
+  // Screenshots
+  removeScreenshot(); // clear both
+  let existingScreenshots = [];
+  if (Array.isArray(trade.screenshots) && trade.screenshots.length > 0) {
+    existingScreenshots = trade.screenshots.filter(s => s);
+  } else if (trade.screenshot) {
+    existingScreenshots = [trade.screenshot];
+  }
+  if (existingScreenshots[0]) setScreenshot(existingScreenshots[0], 1);
+  if (existingScreenshots[1]) setScreenshot(existingScreenshots[1], 2);
+  
+  // Show edit-mode banner
+  showEditBanner(trade);
+  
+  // Scroll to top of form
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function showEditBanner(trade) {
+  let banner = document.getElementById('editModeBanner');
+  if (!banner) {
+    banner = document.createElement('div');
+    banner.id = 'editModeBanner';
+    banner.style.cssText = 'background:linear-gradient(135deg,#1e40af,#2563eb); color:white; padding:12px 16px; border-radius:8px; margin-bottom:16px; display:flex; justify-content:space-between; align-items:center; font-size:14px;';
+    const tradesPanel = document.getElementById('panel-trades');
+    const firstCard = tradesPanel.querySelector('.card');
+    tradesPanel.insertBefore(banner, firstCard);
+  }
+  const d = new Date(trade.timestamp);
+  banner.innerHTML = `<span>✏️ Je bewerkt een bestaande trade (${trade.instrument}, ${d.toLocaleDateString('nl-BE')}). Klik "Trade opslaan" om de wijzigingen te bewaren.</span>
+    <button onclick="cancelEditMode()" style="background:rgba(255,255,255,0.2); border:none; color:white; padding:6px 12px; border-radius:6px; cursor:pointer; font-size:13px; white-space:nowrap; margin-left:12px;">Annuleren</button>`;
+  banner.style.display = 'flex';
+  // Show the delete zone at the bottom of the form
+  const deleteZone = document.getElementById('editDeleteZone');
+  if (deleteZone) deleteZone.style.display = 'block';
+}
+
+function cancelEditMode() {
+  editingTradeId = null;
+  const banner = document.getElementById('editModeBanner');
+  if (banner) banner.style.display = 'none';
+  const deleteZone = document.getElementById('editDeleteZone');
+  if (deleteZone) deleteZone.style.display = 'none';
+  clearTradeForm();
+  currentPreTradeCheck = {};
+}
+
+async function deleteCurrentEditingTrade() {
+  if (!editingTradeId) return;
+  const id = editingTradeId;
+  await deleteTrade(id);
+  // If deletion succeeded, the trade is gone from state
+  if (!state.trades.find(t => t.id === id)) {
+    cancelEditMode();
+    switchToPanel('history');
+    renderHistory();
+  }
+}
+
+async function deleteTrade(tradeId) {
+  const trade = state.trades.find(t => t.id === tradeId);
+  if (!trade) return;
+  const d = new Date(trade.timestamp);
+  if (!confirm(`Trade verwijderen?\n\n${trade.instrument} ${trade.direction} - ${d.toLocaleDateString('nl-BE')} - €${trade.pnl.toFixed(2)}\n\nDit kan niet ongedaan worden gemaakt.`)) return;
+  
+  try {
+    await cloudStorage.delete('trades', 'id', tradeId);
+    state.trades = state.trades.filter(t => t.id !== tradeId);
+    showToast('Trade verwijderd');
+    renderHistory();
+    renderTodayTrades();
+    // Close the viewer modal if open
+    const modal = document.getElementById('screenshotViewerModal');
+    if (modal) modal.style.display = 'none';
+  } catch (err) {
+    showToast('Fout bij verwijderen: ' + err.message, true);
+  }
+}
+
+function clearTradeForm() {
+  ['tradeEntry', 'tradeExit', 'tradeStop', 'tradeTarget', 'tradePnL', 'tradeSize', 'tradeReason', 'tradeLessons', 'tradeInstrumentCustom', 'tradeExactTime', 'tradeExitTime', 'evalMentorName'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+  // Reset duration display
+  const durDisplay = document.getElementById('tradeDurationDisplay');
+  if (durDisplay) {
+    durDisplay.textContent = '— min';
+    durDisplay.style.color = '#94a3b8';
+  }
+  // Reset all evaluation dropdowns
+  ['tradeImprovement', 'evalDailyTrend', 'evalLevel', 'evalLevelPrecision', 'evalIndices', 'evalTimeframe', 'evalHammer', 'evalStoppedOut', 'evalManualClose', 'evalVwap', 'evalExit', 'evalAtr', 'evalMentorFollowed'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+  // Reset touched2R checkbox
+  const touched2R = document.getElementById('evalTouched2R');
+  if (touched2R) touched2R.checked = false;
+  // Hide custom instrument input and mentor field
+  const customInput = document.getElementById('tradeInstrumentCustom');
+  if (customInput) customInput.style.display = 'none';
+  const mentorGroup = document.getElementById('mentorNameGroup');
+  if (mentorGroup) mentorGroup.style.display = 'none';
+  // Reset instrument select to first option
+  const instrSelect = document.getElementById('tradeInstrument');
+  if (instrSelect) instrSelect.value = 'DAX';
+  // Reset strategy checklist checkboxes
+  document.querySelectorAll('input[id^="strat-"]').forEach(cb => cb.checked = false);
+  updateStrategyScore();
+  // Clear screenshot
+  removeScreenshot();
+}
+
+function updateTradeWarning() {
+  const el = document.getElementById('tradeWarning');
+  let warnings = [];
+  
+  if (!state.todayChecklist) {
+    warnings.push('<div class="warning-box">⚠️ Je hebt vandaag nog geen <strong>Pre-Market Checklist</strong> ingevuld. Doe dit eerst.</div>');
+  } else if (state.todayChecklist.status === 'no-trade') {
+    warnings.push('<div class="warning-box">🚫 Je Pre-Market checklist zegt: GEEN TRADING vandaag. Het feit dat je toch wil loggen is een signaal. Heroverweeg.</div>');
+  } else if (state.todayChecklist.status === 'live-half-size') {
+    warnings.push('<div class="warning-box">⚠️ Pre-Market score zegt: traden met HALVE risk unit. Verklein je positiegrootte met 50%.</div>');
+  }
+  
+  // Daily trade limit
+  const todayTrades = state.trades.filter(t => t.date === today());
+  if (todayTrades.length >= state.settings.maxTrades) {
+    warnings.push(`<div class="warning-box">⚠️ Daglimiet bereikt: ${todayTrades.length}/${state.settings.maxTrades} trades. STOP.</div>`);
+  }
+  
+  el.innerHTML = warnings.join('');
+}
+
+function renderTodayTrades() {
+  const todayTrades = state.trades.filter(t => t.date === today());
+  const el = document.getElementById('todayTrades');
+  
+  if (todayTrades.length === 0) {
+    el.innerHTML = '<div class="empty-state">Nog geen trades vandaag.</div>';
+    return;
+  }
+  
+  let totalPnL = 0;
+  let wins = 0, losses = 0, breakevens = 0;
+  todayTrades.forEach(t => { 
+    totalPnL += t.pnl; 
+    const cls = classifyTrade(t);
+    if (cls === 'win') wins++;
+    else if (cls === 'loss') losses++;
+    else breakevens++;
+  });
+  const decisive = wins + losses;
+  const winRate = decisive > 0 ? Math.round(wins/decisive*100) : 0;
+  
+  let html = `<div class="stats-row">
+    <div class="stat-box"><div class="stat-label">Aantal</div><div class="stat-value">${todayTrades.length}/${state.settings.maxTrades}</div></div>
+    <div class="stat-box"><div class="stat-label">P&L</div><div class="stat-value ${totalPnL>=0?'pnl-positive':'pnl-negative'}">€${totalPnL.toFixed(2)}</div></div>
+    <div class="stat-box"><div class="stat-label">W / L / BE</div><div class="stat-value" style="font-size:18px;"><span class="pnl-positive">${wins}</span> / <span class="pnl-negative">${losses}</span> / <span style="color:#94a3b8;">${breakevens}</span></div></div>
+    <div class="stat-box"><div class="stat-label">Win rate (excl BE)</div><div class="stat-value">${winRate}%</div></div>
+  </div>`;
+  
+  html += '<table><thead><tr><th>Tijd</th><th>Instrument</th><th>Richting</th><th>Setup</th><th>P&L</th><th>Type</th><th>Plan?</th></tr></thead><tbody>';
+  todayTrades.forEach(t => {
+    const time = new Date(t.timestamp).toLocaleTimeString('nl-BE', {hour:'2-digit', minute:'2-digit'});
+    const cls = classifyTrade(t);
+    const pnlColor = cls === 'win' ? 'pnl-positive' : cls === 'loss' ? 'pnl-negative' : '';
+    const typeLabel = cls === 'win' ? '<span class="pnl-positive">W</span>' : cls === 'loss' ? '<span class="pnl-negative">L</span>' : '<span style="color:#94a3b8;">BE</span>';
+    html += `<tr>
+      <td>${time}</td>
+      <td>${t.instrument}</td>
+      <td>${t.direction}</td>
+      <td>${t.setup || '-'}</td>
+      <td class="${pnlColor}" style="${cls==='breakeven'?'color:#94a3b8;':''}">€${t.pnl.toFixed(2)}</td>
+      <td>${typeLabel}</td>
+      <td>${t.planFollowed}</td>
+    </tr>`;
+  });
+  html += '</tbody></table>';
+  el.innerHTML = html;
+}
+
+// ==================== DAY REVIEW ====================
+async function saveDayReview() {
+  const lessonEl = document.getElementById('reviewLesson');
+  const lesson = lessonEl ? lessonEl.value.trim() : '';
+  if (!lesson) {
+    showToast('Vul minstens je belangrijkste les van vandaag in', true);
+    return;
+  }
+  
+  const review = {
+    date: today(),
+    timestamp: new Date().toISOString(),
+    lesson: lesson
+  };
+  
+  try {
+    await cloudStorage.upsert('reviews', { date: today(), data: review }, 'user_id,date');
+    state.dayReviews = state.dayReviews.filter(r => r.date !== today());
+    state.dayReviews.push(review);
+    showToast('Dag afgesloten');
+    updateDayReviewSavedInfo();
+  } catch (err) {
+    showToast('Fout bij opslaan: ' + err.message, true);
+  }
+}
+
+function updateDayReviewSavedInfo() {
+  const el = document.getElementById('dayReviewSavedInfo');
+  if (!el) return;
+  const todayReview = state.dayReviews.find(r => r.date === today());
+  if (todayReview) {
+    const t = new Date(todayReview.timestamp);
+    el.innerHTML = `✓ Opgeslagen om ${t.toLocaleTimeString('nl-BE', {hour:'2-digit', minute:'2-digit'})}`;
+    // Pre-fill the lesson field so user can edit
+    const lessonEl = document.getElementById('reviewLesson');
+    if (lessonEl && !lessonEl.value) lessonEl.value = todayReview.lesson || '';
+  } else {
+    el.textContent = '';
+  }
+}
+
+function renderDayStats() {
+  const todayTrades = state.trades.filter(t => t.date === today());
+  let totalPnL = 0;
+  let wins = 0, losses = 0, breakevens = 0;
+  todayTrades.forEach(t => { 
+    totalPnL += t.pnl; 
+    const cls = classifyTrade(t);
+    if (cls === 'win') wins++;
+    else if (cls === 'loss') losses++;
+    else breakevens++;
+  });
+  const decisive = wins + losses;
+  const winRate = decisive > 0 ? Math.round(wins/decisive*100) : 0;
+  
+  const el = document.getElementById('dayStats');
+  el.innerHTML = `
+    <div class="stat-box"><div class="stat-label">Trades</div><div class="stat-value">${todayTrades.length}</div></div>
+    <div class="stat-box"><div class="stat-label">Wins</div><div class="stat-value pnl-positive">${wins}</div></div>
+    <div class="stat-box"><div class="stat-label">Losses</div><div class="stat-value pnl-negative">${losses}</div></div>
+    <div class="stat-box"><div class="stat-label">Breakeven</div><div class="stat-value" style="color:#94a3b8;">${breakevens}</div></div>
+    <div class="stat-box"><div class="stat-label">P&L</div><div class="stat-value ${totalPnL>=0?'pnl-positive':'pnl-negative'}">€${totalPnL.toFixed(2)}</div></div>
+    <div class="stat-box"><div class="stat-label">Win Rate (excl BE)</div><div class="stat-value">${winRate}%</div></div>
+  `;
+}
+
+// ==================== HISTORY ====================
+function renderHistory() {
+  const allEl = document.getElementById('allTrades');
+  if (state.trades.length === 0) {
+    allEl.innerHTML = '<div class="empty-state">Nog geen trades.</div>';
+  } else {
+    let html = '<table><thead><tr><th>Datum</th><th>Entry</th><th>Exit</th><th>Duur</th><th>Instrument</th><th>Richting</th><th>Setup</th><th>P&L</th><th>R</th><th>2R advies</th><th>Plan?</th><th>Score</th><th>Acties</th></tr></thead><tbody>';
+    state.trades.forEach(t => {
+      const d = new Date(t.timestamp);
+      const entryTime = t.exactTime || d.toLocaleTimeString('nl-BE', {hour:'2-digit', minute:'2-digit'});
+      const exitTime = t.exitTime || '-';
+      const duration = t.durationMinutes !== null && t.durationMinutes !== undefined 
+        ? formatDuration(t.durationMinutes) 
+        : '-';
+      // R-multiple
+      const r = getRMultiple(t);
+      const rCell = r !== null 
+        ? `<span class="${r>0?'pnl-positive':r<0?'pnl-negative':''}">${r>=0?'+':''}${r.toFixed(2)}R</span>`
+        : '<span style="color:#64748b;">—</span>';
+      // 2R advice column: only meaningful if trade touched 2R and was NOT secured at 2R
+      let adviceCell = '<span style="color:#475569;">—</span>';
+      if (touched2R(t)) {
+        const exitStrat = t.evaluation && t.evaluation.exit;
+        if (exitStrat === '2R_secured') {
+          adviceCell = '<span style="color:#60a5fa; font-size:11px;">2R gepakt ✓</span>';
+        } else if (r !== null) {
+          if (r > 2.1) adviceCell = '<span style="color:#10b981; font-size:11px;">✓ Laten lopen</span>';
+          else if (r < 1.9) adviceCell = '<span style="color:#ef4444; font-size:11px;">✗ Had beter 2R gepakt</span>';
+          else adviceCell = '<span style="color:#f59e0b; font-size:11px;">≈ Gelijk uit</span>';
+        }
+      }
+      // Count screenshots
+      const screenshotCount = Array.isArray(t.screenshots) && t.screenshots.length > 0
+        ? t.screenshots.filter(s => s).length
+        : (t.screenshot ? 1 : 0);
+      const ssLabel = screenshotCount > 0 ? `📷${screenshotCount > 1 ? ' ×' + screenshotCount : ''} ` : '';
+      const actionBtns = `<div style="display:flex; gap:4px; flex-wrap:wrap;">
+        <button class="secondary" style="padding:4px 8px; font-size:11px;" onclick="showTradeScreenshot('${t.id}')" title="Bekijk details">${ssLabel}Bekijk</button>
+        <button class="secondary" style="padding:4px 8px; font-size:11px;" onclick="editTrade('${t.id}')" title="Bewerken">✏️</button>
+      </div>`;
+      html += `<tr>
+        <td>${d.toLocaleDateString('nl-BE')}</td>
+        <td>${entryTime}</td>
+        <td>${exitTime}</td>
+        <td>${duration}</td>
+        <td>${t.instrument}</td>
+        <td>${t.direction}</td>
+        <td>${t.setup || '-'}</td>
+        <td class="${t.pnl>=0?'pnl-positive':'pnl-negative'}">€${t.pnl.toFixed(2)}</td>
+        <td>${rCell}</td>
+        <td>${adviceCell}</td>
+        <td>${t.planFollowed}</td>
+        <td>${t.checklistScore || '-'}</td>
+        <td>${actionBtns}</td>
+      </tr>`;
+    });
+    html += '</tbody></table>';
+    allEl.innerHTML = html;
+  }
+  
+  const histEl = document.getElementById('checklistHistory');
+  if (state.checklistHistory.length === 0) {
+    histEl.innerHTML = '<div class="empty-state">Nog geen checklist geschiedenis.</div>';
+  } else {
+    let html = '<table><thead><tr><th>Datum</th><th>Score</th><th>Status</th></tr></thead><tbody>';
+    state.checklistHistory.forEach(c => {
+      html += `<tr>
+        <td>${c.date}</td>
+        <td>${c.score}/${c.maxScore}</td>
+        <td>${c.status}</td>
+      </tr>`;
+    });
+    html += '</tbody></table>';
+    histEl.innerHTML = html;
+  }
+  
+  // Daily lessons history
+  const lessonsEl = document.getElementById('lessonsHistory');
+  if (!lessonsEl) return;
+  const sortedReviews = [...state.dayReviews]
+    .filter(r => r.lesson && r.lesson.trim())
+    .sort((a, b) => b.date.localeCompare(a.date));
+  if (sortedReviews.length === 0) {
+    lessonsEl.innerHTML = '<div class="empty-state">Nog geen lessen opgeslagen.</div>';
+  } else {
+    let html = '';
+    sortedReviews.forEach(r => {
+      const d = new Date(r.date + 'T12:00:00');
+      const dateStr = d.toLocaleDateString('nl-BE', { weekday: 'short', day: 'numeric', month: 'short' });
+      html += `<div style="padding:12px 0; border-bottom:1px solid #1e293b;">
+        <div style="font-size:12px; color:#94a3b8; margin-bottom:4px;">${dateStr}</div>
+        <div style="color:#e2e8f0; line-height:1.5;">${r.lesson}</div>
+      </div>`;
+    });
+    lessonsEl.innerHTML = html;
+  }
+}
+
+// ==================== INSIGHTS ====================
+let insightsFilterInstrument = 'all';
+let insightsFilterPeriod = 'all'; // 'all', 'today', 'week', 'month'
+
+function setInsightsFilter(value) {
+  insightsFilterInstrument = value;
+  renderInsights();
+}
+
+function setInsightsPeriod(value) {
+  insightsFilterPeriod = value;
+  renderInsights();
+}
+
+// Filter trades by selected period
+function filterByPeriod(trades, period) {
+  if (period === 'all') return trades;
+  const now = new Date();
+  const todayStr = now.toISOString().split('T')[0];
+  
+  if (period === 'today') {
+    return trades.filter(t => t.date === todayStr);
+  }
+  if (period === 'week') {
+    // Last 7 days (rolling)
+    const weekAgo = new Date(now);
+    weekAgo.setDate(weekAgo.getDate() - 7);
+    const weekAgoStr = weekAgo.toISOString().split('T')[0];
+    return trades.filter(t => t.date >= weekAgoStr);
+  }
+  if (period === 'month') {
+    // Last 30 days (rolling)
+    const monthAgo = new Date(now);
+    monthAgo.setDate(monthAgo.getDate() - 30);
+    const monthAgoStr = monthAgo.toISOString().split('T')[0];
+    return trades.filter(t => t.date >= monthAgoStr);
+  }
+  return trades;
+}
+
+// ====== 2R PAKKEN OF LATEN LOPEN? Analyse ======
+function render2RAnalysis(trades) {
+  // Only consider trades that touched 2R
+  const touched = trades.filter(t => touched2R(t));
+  
+  if (touched.length < 3) {
+    return `<div class="card" style="background:#0f172a; margin-top:20px;">
+      <h3 style="margin-top:0;">🎯 2R pakken of laten lopen?</h3>
+      <div style="color:#94a3b8; font-size:14px;">
+        Nog niet genoeg data. Vink "Trade heeft 2R aangeraakt" aan bij minstens 3 trades die het 2R-niveau hebben bereikt, om deze analyse te zien.
+      </div>
+      <div style="color:#64748b; font-size:13px; margin-top:8px;">
+        Status: ${touched.length} trade(s) met 2R aangeraakt.
+      </div>
+    </div>`;
+  }
+  
+  // Split into two strategies:
+  // A) Vroeg gepakt: exit === '2R_secured' → known +2R outcome
+  // B) Laten lopen: exit !== '2R_secured' (trailed/manual/stopped) → R-multiple from data
+  const securedAt2R = touched.filter(t => t.evaluation && t.evaluation.exit === '2R_secured');
+  const letRun = touched.filter(t => t.evaluation && t.evaluation.exit !== '2R_secured');
+  
+  // For "secured": every trade is exactly +2R (by definition, they hit 2R and were closed there)
+  const securedCount = securedAt2R.length;
+  const securedAvgR = securedCount > 0 ? 2.0 : null; // by definition
+  
+  // For "let run": calculate actual R-multiple per trade
+  const letRunWithR = letRun.map(t => ({ trade: t, r: getRMultiple(t) })).filter(x => x.r !== null);
+  const letRunCount = letRunWithR.length;
+  const letRunAvgR = letRunCount > 0 ? letRunWithR.reduce((s,x) => s+x.r, 0) / letRunCount : null;
+  
+  // Distribution buckets for "let run"
+  const buckets = {
+    'Onder 1R': 0,       // r < 1
+    '1R - 1.5R': 0,      // 1 <= r < 1.5
+    '1.5R - 2R': 0,      // 1.5 <= r < 2
+    'Exact 2R': 0,       // r ≈ 2 (within 0.1)
+    'Boven 2R': 0        // r > 2.1
+  };
+  letRunWithR.forEach(({r}) => {
+    if (r < 1) buckets['Onder 1R']++;
+    else if (r < 1.5) buckets['1R - 1.5R']++;
+    else if (r < 1.9) buckets['1.5R - 2R']++;
+    else if (r <= 2.1) buckets['Exact 2R']++;
+    else buckets['Boven 2R']++;
+  });
+  
+  // How many would have been better off taking 2R?
+  // i.e., how many "let run" trades ended up below 2R?
+  const belowTarget = letRunWithR.filter(({r}) => r < 1.9).length;
+  const aboveTarget = letRunWithR.filter(({r}) => r > 2.1).length;
+  const atTarget = letRunCount - belowTarget - aboveTarget;
+  
+  // Verdict
+  let verdict = '';
+  let verdictColor = '#94a3b8';
+  if (letRunAvgR !== null) {
+    if (letRunAvgR > 2.2) {
+      verdict = `✅ <strong>Laten lopen was beter</strong> — gemiddeld ${letRunAvgR.toFixed(2)}R per trade (vs zekere 2R). Je laten-lopen aanpak werkt.`;
+      verdictColor = '#10b981';
+    } else if (letRunAvgR < 1.8) {
+      verdict = `❌ <strong>2R direct pakken was beter geweest</strong> — laten lopen gaf gemiddeld maar ${letRunAvgR.toFixed(2)}R, terwijl 2R pakken zekere 2R zou zijn geweest. Verlies door pullbacks weegt zwaarder dan winst door doorlopen.`;
+      verdictColor = '#ef4444';
+    } else {
+      verdict = `⚖️ <strong>Vergelijkbaar</strong> — laten lopen gaf gemiddeld ${letRunAvgR.toFixed(2)}R. Nauwelijks verschil met direct 2R pakken. Andere factoren (stress, beschikbare tijd) kunnen de doorslag geven.`;
+      verdictColor = '#f59e0b';
+    }
+  }
+  
+  // Build bar chart for buckets
+  const maxCount = Math.max(...Object.values(buckets), 1);
+  let bucketHtml = '';
+  for (const [label, count] of Object.entries(buckets)) {
+    if (count === 0 && letRunCount > 0) {
+      bucketHtml += `<div style="display:flex; align-items:center; margin-bottom:6px; font-size:12px;">
+        <div style="width:90px; color:#64748b;">${label}</div>
+        <div style="flex:1; height:18px; background:#1e293b; border-radius:4px;"></div>
+        <div style="width:30px; text-align:right; color:#64748b;">0</div>
+      </div>`;
+      continue;
+    }
+    const pct = (count / maxCount) * 100;
+    const color = label === 'Onder 1R' ? '#ef4444' 
+                : label === '1R - 1.5R' ? '#f87171'
+                : label === '1.5R - 2R' ? '#fbbf24'
+                : label === 'Exact 2R' ? '#60a5fa'
+                : '#10b981';
+    bucketHtml += `<div style="display:flex; align-items:center; margin-bottom:6px; font-size:12px;">
+      <div style="width:90px; color:#cbd5e1;">${label}</div>
+      <div style="flex:1; height:18px; background:#1e293b; border-radius:4px; position:relative;">
+        <div style="position:absolute; left:0; top:0; height:100%; width:${pct}%; background:${color}; border-radius:4px;"></div>
+      </div>
+      <div style="width:30px; text-align:right; color:#cbd5e1;">${count}</div>
+    </div>`;
+  }
+  
+  return `<div class="card" style="background:linear-gradient(135deg, #0f172a, #1e293b); border:1px solid #334155; margin-top:20px;">
+    <h3 style="margin-top:0; display:flex; align-items:center; gap:8px;">🎯 2R pakken of laten lopen?</h3>
+    <div style="color:#94a3b8; font-size:13px; margin-bottom:16px;">
+      Analyse over ${touched.length} trades die het 2R-niveau hebben aangeraakt.
+    </div>
+    
+    <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); gap:12px; margin-bottom:20px;">
+      <div style="background:#0f172a; padding:14px; border-radius:8px; border-left:3px solid #60a5fa;">
+        <div style="font-size:11px; color:#94a3b8; text-transform:uppercase; letter-spacing:0.5px;">Direct 2R gepakt</div>
+        <div style="font-size:24px; font-weight:700; color:#60a5fa; margin:4px 0;">+2.00R</div>
+        <div style="font-size:12px; color:#94a3b8;">${securedCount} trade(s) · per definitie</div>
+      </div>
+      <div style="background:#0f172a; padding:14px; border-radius:8px; border-left:3px solid ${letRunAvgR !== null && letRunAvgR >= 2 ? '#10b981' : '#ef4444'};">
+        <div style="font-size:11px; color:#94a3b8; text-transform:uppercase; letter-spacing:0.5px;">Laten lopen</div>
+        <div style="font-size:24px; font-weight:700; color:${letRunAvgR !== null && letRunAvgR >= 2 ? '#10b981' : '#ef4444'}; margin:4px 0;">${letRunAvgR !== null ? (letRunAvgR >= 0 ? '+' : '') + letRunAvgR.toFixed(2) + 'R' : '— R'}</div>
+        <div style="font-size:12px; color:#94a3b8;">${letRunCount} trade(s) · gemiddeld behaald</div>
+      </div>
+      <div style="background:#0f172a; padding:14px; border-radius:8px; border-left:3px solid #f59e0b;">
+        <div style="font-size:11px; color:#94a3b8; text-transform:uppercase; letter-spacing:0.5px;">Onder 2R uitgekomen</div>
+        <div style="font-size:24px; font-weight:700; color:#f59e0b; margin:4px 0;">${letRunCount > 0 ? Math.round(belowTarget/letRunCount*100) : 0}%</div>
+        <div style="font-size:12px; color:#94a3b8;">${belowTarget} van ${letRunCount} let-run trades</div>
+      </div>
+    </div>
+    
+    ${verdict ? `<div style="background:rgba(${verdictColor === '#10b981' ? '16,185,129' : verdictColor === '#ef4444' ? '239,68,68' : '245,158,11'},0.1); border-left:3px solid ${verdictColor}; padding:12px 14px; border-radius:6px; margin-bottom:16px; color:#e2e8f0; font-size:14px; line-height:1.5;">${verdict}</div>` : ''}
+    
+    ${letRunCount > 0 ? `
+    <div style="background:#0f172a; padding:14px; border-radius:8px;">
+      <div style="font-size:13px; color:#cbd5e1; margin-bottom:10px; font-weight:600;">Verdeling van "laten lopen" uitkomsten:</div>
+      ${bucketHtml}
+    </div>` : ''}
+  </div>`;
+}
+
+function renderInsights() {
+  const el = document.getElementById('insightsContent');
+  
+  if (state.trades.length < 3) {
+    el.innerHTML = '<div class="empty-state">Log minstens 3 trades om inzichten te zien.</div>';
+    return;
+  }
+  
+  // Build filters
+  const instruments = [...new Set(state.trades.map(t => t.instrument))].sort();
+  
+  let filterHtml = '<div style="margin-bottom:20px; display:flex; gap:12px; flex-wrap:wrap; align-items:center;">';
+  
+  // Period filter
+  filterHtml += '<div style="display:flex; align-items:center; gap:8px;">';
+  filterHtml += '<label style="font-size:13px; color:#94a3b8;">Periode:</label>';
+  filterHtml += `<select onchange="setInsightsPeriod(this.value)" style="background:#0f172a; border:1px solid #334155; color:#e2e8f0; padding:8px 12px; border-radius:6px;">`;
+  const periodLabels = {
+    'all': 'Alle tijd',
+    'today': 'Vandaag',
+    'week': 'Laatste 7 dagen',
+    'month': 'Laatste 30 dagen'
+  };
+  for (const [val, label] of Object.entries(periodLabels)) {
+    filterHtml += `<option value="${val}" ${insightsFilterPeriod===val?'selected':''}>${label}</option>`;
+  }
+  filterHtml += '</select></div>';
+  
+  // Instrument filter (counts based on period-filtered set)
+  const periodFiltered = filterByPeriod(state.trades, insightsFilterPeriod);
+  filterHtml += '<div style="display:flex; align-items:center; gap:8px;">';
+  filterHtml += '<label style="font-size:13px; color:#94a3b8;">Instrument:</label>';
+  filterHtml += `<select onchange="setInsightsFilter(this.value)" style="background:#0f172a; border:1px solid #334155; color:#e2e8f0; padding:8px 12px; border-radius:6px;">`;
+  filterHtml += `<option value="all" ${insightsFilterInstrument==='all'?'selected':''}>Alle instrumenten (${periodFiltered.length})</option>`;
+  instruments.forEach(inst => {
+    const count = periodFiltered.filter(t => t.instrument === inst).length;
+    filterHtml += `<option value="${inst}" ${insightsFilterInstrument===inst?'selected':''}>${inst} (${count})</option>`;
+  });
+  filterHtml += '</select></div>';
+  filterHtml += '</div>';
+  
+  // Apply both filters: period first, then instrument
+  const filtered = insightsFilterInstrument === 'all' 
+    ? periodFiltered 
+    : periodFiltered.filter(t => t.instrument === insightsFilterInstrument);
+  
+  if (filtered.length < 3) {
+    el.innerHTML = filterHtml + `<div class="empty-state">Minstens 3 trades nodig${insightsFilterPeriod !== 'all' ? ' in deze periode' : ''}${insightsFilterInstrument !== 'all' ? ' op dit instrument' : ''} (huidig: ${filtered.length}).</div>`;
+    return;
+  }
+  
+  // Trades with usable points data (entry + exit both set) — used ONLY for Profit Factor
+  const tradesWithPoints = filtered.filter(t => hasPoints(t));
+  const wins = filtered.filter(t => isWin(t));
+  const losses = filtered.filter(t => isLoss(t));
+  const breakevens = filtered.filter(t => isBreakeven(t));
+  const decisive = wins.length + losses.length; // BE excluded from win rate
+  const winRate = decisive > 0 ? wins.length / decisive * 100 : 0;
+  
+  // Most metrics use € P&L
+  const totalPnL = filtered.reduce((s, t) => s + t.pnl, 0);
+  const avgWin = wins.length > 0 ? wins.reduce((s, t) => s + t.pnl, 0) / wins.length : 0;
+  const avgLoss = losses.length > 0 ? losses.reduce((s, t) => s + t.pnl, 0) / losses.length : 0;
+  const expectancy = decisive > 0 ? (winRate/100 * avgWin) + ((1 - winRate/100) * avgLoss) : 0;
+  
+  // Profit Factor uses R-MULTIPLES so sizing errors don't pollute it.
+  // R-multiple = (exit - entry) / (entry - SL), signed by direction.
+  // Aggregate: PF = sum(winning R) / |sum(losing R)|
+  const winsWithR = [];
+  const lossesWithR = [];
+  filtered.forEach(t => {
+    const r = getRMultiple(t);
+    if (r === null) return;
+    if (r > 0) winsWithR.push(r);
+    else if (r < 0) lossesWithR.push(r);
+    // r === 0 (rare) excluded from PF
+  });
+  const totalWinR = winsWithR.reduce((s, r) => s + r, 0);
+  const totalLossR = lossesWithR.reduce((s, r) => s + r, 0); // negative
+  const profitFactor = totalLossR !== 0 ? Math.abs(totalWinR / totalLossR) : (totalWinR > 0 ? Infinity : 0);
+  const pfTotalUsable = winsWithR.length + lossesWithR.length;
+  const pfMissing = filtered.length - pfTotalUsable;
+  const pfNote = pfMissing > 0 
+    ? `Op R-multiples (${pfMissing} trade(s) zonder entry/exit/SL niet meegerekend)` 
+    : 'Op R-multiples — niet beïnvloed door positiegrootte';
+  
+  const beThreshold = getBreakevenThreshold();
+  
+  let html = filterHtml + `<div class="insight-grid">
+    <div class="insight-card">
+      <h4>Totale P&L</h4>
+      <div class="insight-value ${totalPnL>=0?'pnl-positive':'pnl-negative'}">€${totalPnL.toFixed(2)}</div>
+      <div class="insight-detail">Over ${filtered.length} trades · BE drempel: ±€${beThreshold}</div>
+    </div>
+    <div class="insight-card">
+      <h4>Win Rate</h4>
+      <div class="insight-value">${winRate.toFixed(1)}%</div>
+      <div class="insight-detail">${wins.length}W / ${losses.length}L / ${breakevens.length}BE (BE niet meegerekend)</div>
+    </div>
+    <div class="insight-card">
+      <h4>Expectancy</h4>
+      <div class="insight-value ${expectancy>=0?'pnl-positive':'pnl-negative'}">€${expectancy.toFixed(2)}</div>
+      <div class="insight-detail">Verwachte winst per beslissende trade</div>
+    </div>
+    <div class="insight-card">
+      <h4>Profit Factor</h4>
+      <div class="insight-value">${profitFactor.toFixed(2)}</div>
+      <div class="insight-detail">${pfNote}. Boven 1.5 = goed, boven 2 = uitstekend</div>
+    </div>
+    <div class="insight-card">
+      <h4>Avg Win / Avg Loss</h4>
+      <div class="insight-value">${avgLoss !== 0 ? Math.abs(avgWin/avgLoss).toFixed(2) : '∞'}</div>
+      <div class="insight-detail">Avg win: €${avgWin.toFixed(2)} / Avg loss: €${avgLoss.toFixed(2)}</div>
+    </div>
+  </div>`;
+  
+  // ====== 2R PAKKEN OF LATEN LOPEN? ======
+  html += render2RAnalysis(filtered);
+  
+  // Breakdown by instrument (only show when "all")
+  if (insightsFilterInstrument === 'all') {
+    html += '<h3 style="margin-top:24px;">Per Instrument</h3>';
+    html += renderBreakdown('instrument', filtered);
+  }
+  
+  // Breakdown by session
+  html += '<h3 style="margin-top:24px;">Per Sessie</h3>';
+  html += renderBreakdown('session', filtered);
+  
+  // Breakdown by time block
+  html += '<h3 style="margin-top:24px;">Per Tijdsblok</h3>';
+  html += renderBreakdown('timeBlock', filtered);
+  
+  // Breakdown by setup
+  html += '<h3 style="margin-top:24px;">Per Setup Type</h3>';
+  html += renderBreakdown('setup', filtered);
+  
+  // Plan adherence impact
+  html += '<h3 style="margin-top:24px;">Plan Gevolgd?</h3>';
+  html += renderBreakdown('planFollowed', filtered);
+  
+  // Improvement reasons
+  html += '<h3 style="margin-top:24px;">Verbeterpunten</h3>';
+  html += renderBreakdown('improvement', filtered);
+  
+  // Trade evaluation breakdowns (the new dropdowns)
+  html += '<h3 style="margin-top:24px;">📊 Trade Analyse Statistieken</h3>';
+  html += renderEvaluationBreakdown('dailyTrend', 'Mee met daily trend', filtered);
+  html += renderEvaluationBreakdown('level', 'Op welk level', filtered);
+  html += renderEvaluationBreakdown('levelPrecision', 'Precisie op level', filtered);
+  html += renderEvaluationBreakdown('indices', 'Indexen in de rug', filtered);
+  html += renderEvaluationBreakdown('timeframe', 'Timeframe entry', filtered);
+  html += renderEvaluationBreakdown('hammer', 'Hammercandle aanwezig', filtered);
+  html += renderEvaluationBreakdown('stoppedOut', 'Indien uitgetikt', filtered);
+  html += renderEvaluationBreakdown('manualClose', 'Indien gevoelsmatig afgesloten', filtered);
+  html += renderEvaluationBreakdown('vwap', 'VWAP invloed', filtered);
+  html += renderEvaluationBreakdown('exit', 'Exit strategie', filtered);
+  html += renderEvaluationBreakdown('atr', 'ATR invloed', filtered);
+  html += renderEvaluationBreakdown('mentorFollowed', 'Mentor gevolgd', filtered);
+  html += renderEvaluationBreakdown('mentorName', 'Mentor naam', filtered);
+  
+  // Trade duration breakdown
+  html += renderDurationBreakdown(filtered);
+  
+  // Checklist score correlation
+  html += '<h3 style="margin-top:24px;">Checklist Score vs P&L</h3>';
+  html += renderChecklistCorrelation(filtered);
+  
+  // Emotion correlations
+  html += '<h3 style="margin-top:24px;">Emotie Correlaties</h3>';
+  html += renderEmotionCorrelations(filtered);
+  
+  // Pattern detection
+  html += '<h3 style="margin-top:24px;">🔍 Patronen Gedetecteerd</h3>';
+  html += renderPatterns(filtered);
+  
+  el.innerHTML = html;
+}
+
+function renderDurationBreakdown(trades) {
+  const buckets = {
+    '< 5 min': { trades: [], pnl: 0, wins: 0, losses: 0, breakevens: 0 },
+    '5-15 min': { trades: [], pnl: 0, wins: 0, losses: 0, breakevens: 0 },
+    '15-30 min': { trades: [], pnl: 0, wins: 0, losses: 0, breakevens: 0 },
+    '30-60 min': { trades: [], pnl: 0, wins: 0, losses: 0, breakevens: 0 },
+    '> 60 min': { trades: [], pnl: 0, wins: 0, losses: 0, breakevens: 0 },
+    'Onbekend': { trades: [], pnl: 0, wins: 0, losses: 0, breakevens: 0 }
+  };
+  
+  trades.forEach(t => {
+    const m = t.durationMinutes;
+    let bucket;
+    if (m === null || m === undefined) bucket = 'Onbekend';
+    else if (m < 5) bucket = '< 5 min';
+    else if (m < 15) bucket = '5-15 min';
+    else if (m < 30) bucket = '15-30 min';
+    else if (m < 60) bucket = '30-60 min';
+    else bucket = '> 60 min';
+    
+    buckets[bucket].trades.push(t);
+    buckets[bucket].pnl += t.pnl;
+    const cls = classifyTrade(t);
+    if (cls === 'win') buckets[bucket].wins++;
+    else if (cls === 'loss') buckets[bucket].losses++;
+    else buckets[bucket].breakevens++;
+  });
+  
+  const filledBuckets = Object.entries(buckets).filter(([, d]) => d.trades.length > 0);
+  if (filledBuckets.length === 0) {
+    return '<div style="color:#64748b; font-size:13px; margin-bottom:14px; padding:8px;">Geen duur-data beschikbaar.</div>';
+  }
+  
+  const maxPnL = Math.max(...filledBuckets.map(([, d]) => Math.abs(d.pnl)));
+  
+  let html = '<div style="margin-bottom:16px;"><div style="font-weight:600; color:#cbd5e1; margin-bottom:8px; font-size:14px;">Duur in trade</div>';
+  html += '<div class="card" style="background:#0f172a; padding:12px;">';
+  filledBuckets.forEach(([key, data]) => {
+    const decisive = data.wins + data.losses;
+    const winRate = decisive > 0 ? (data.wins / decisive * 100).toFixed(0) : '-';
+    const beNote = data.breakevens > 0 ? `, ${data.breakevens}BE` : '';
+    const width = maxPnL > 0 ? Math.abs(data.pnl) / maxPnL * 100 : 0;
+    const avgPnL = (data.pnl / data.trades.length).toFixed(2);
+    html += `<div style="margin-bottom:10px;">
+      <div class="breakdown-row">
+        <span style="font-size:13px;"><strong>${translateLabel(key)}</strong> (${data.trades.length}x, ${winRate}% WR${beNote}, avg €${avgPnL})</span>
+        <span class="${data.pnl>=0?'pnl-positive':'pnl-negative'}">€${data.pnl.toFixed(2)}</span>
+      </div>
+      <div class="breakdown-bar"><div class="breakdown-fill" style="width:${width}%; background:${data.pnl>=0?'linear-gradient(90deg,#10b981,#34d399)':'linear-gradient(90deg,#ef4444,#f87171)'};"></div></div>
+    </div>`;
+  });
+  html += '</div></div>';
+  return html;
+}
+
+function renderEvaluationBreakdown(field, label, trades) {
+  const groups = {};
+  trades.forEach(t => {
+    const val = t.evaluation && t.evaluation[field];
+    if (!val) return; // Skip empty
+    if (!groups[val]) groups[val] = { trades: [], pnl: 0, wins: 0, losses: 0, breakevens: 0 };
+    groups[val].trades.push(t);
+    groups[val].pnl += t.pnl;
+    const cls = classifyTrade(t);
+    if (cls === 'win') groups[val].wins++;
+    else if (cls === 'loss') groups[val].losses++;
+    else groups[val].breakevens++;
+  });
+  
+  if (Object.keys(groups).length === 0) {
+    return `<div style="color:#64748b; font-size:13px; margin-bottom:14px; padding:8px;">Geen data voor "${label}".</div>`;
+  }
+  
+  const sorted = Object.entries(groups).sort((a, b) => b[1].pnl - a[1].pnl);
+  const maxPnL = Math.max(...sorted.map(([,d]) => Math.abs(d.pnl)));
+  
+  let html = `<div style="margin-bottom:16px;"><div style="font-weight:600; color:#cbd5e1; margin-bottom:8px; font-size:14px;">${label}</div>`;
+  html += '<div class="card" style="background:#0f172a; padding:12px;">';
+  sorted.forEach(([key, data]) => {
+    const decisive = data.wins + data.losses;
+    const winRate = decisive > 0 ? (data.wins / decisive * 100).toFixed(0) : '-';
+    const beNote = data.breakevens > 0 ? `, ${data.breakevens}BE` : '';
+    const width = maxPnL > 0 ? Math.abs(data.pnl) / maxPnL * 100 : 0;
+    const avgPnL = (data.pnl / data.trades.length).toFixed(2);
+    html += `<div style="margin-bottom:10px;">
+      <div class="breakdown-row">
+        <span style="font-size:13px;"><strong>${translateLabel(key)}</strong> (${data.trades.length}x, ${winRate}% WR${beNote}, avg €${avgPnL})</span>
+        <span class="${data.pnl>=0?'pnl-positive':'pnl-negative'}">€${data.pnl.toFixed(2)}</span>
+      </div>
+      <div class="breakdown-bar"><div class="breakdown-fill" style="width:${width}%; background:${data.pnl>=0?'linear-gradient(90deg,#10b981,#34d399)':'linear-gradient(90deg,#ef4444,#f87171)'};"></div></div>
+    </div>`;
+  });
+  html += '</div></div>';
+  return html;
+}
+
+function renderBreakdown(field, trades) {
+  const data_set = trades || state.trades;
+  const groups = {};
+  data_set.forEach(t => {
+    const key = t[field] || 'onbekend';
+    if (!groups[key]) groups[key] = { trades: [], pnl: 0, wins: 0, losses: 0, breakevens: 0 };
+    groups[key].trades.push(t);
+    groups[key].pnl += t.pnl;
+    const cls = classifyTrade(t);
+    if (cls === 'win') groups[key].wins++;
+    else if (cls === 'loss') groups[key].losses++;
+    else groups[key].breakevens++;
+  });
+  
+  const sorted = Object.entries(groups).sort((a, b) => b[1].pnl - a[1].pnl);
+  const maxPnL = Math.max(...sorted.map(([,d]) => Math.abs(d.pnl)));
+  
+  let html = '<div class="card" style="background:#0f172a;">';
+  sorted.forEach(([key, data]) => {
+    const decisive = data.wins + data.losses;
+    const winRate = decisive > 0 ? (data.wins / decisive * 100).toFixed(0) : '-';
+    const beNote = data.breakevens > 0 ? `, ${data.breakevens}BE` : '';
+    const width = maxPnL > 0 ? Math.abs(data.pnl) / maxPnL * 100 : 0;
+    html += `<div style="margin-bottom:12px;">
+      <div class="breakdown-row">
+        <span><strong>${translateLabel(key)}</strong> (${data.trades.length} trades, ${winRate}% WR${beNote})</span>
+        <span class="${data.pnl>=0?'pnl-positive':'pnl-negative'}">€${data.pnl.toFixed(2)}</span>
+      </div>
+      <div class="breakdown-bar"><div class="breakdown-fill" style="width:${width}%; background:${data.pnl>=0?'linear-gradient(90deg,#10b981,#34d399)':'linear-gradient(90deg,#ef4444,#f87171)'};"></div></div>
+    </div>`;
+  });
+  html += '</div>';
+  return html;
+}
+
+function renderChecklistCorrelation(trades) {
+  const data_set = trades || state.trades;
+  const buckets = {
+    'Score 40+ (volledig live)': { trades: [], pnl: 0 },
+    'Score 30-39 (halve risk)': { trades: [], pnl: 0 },
+    'Score <30 (geen trade)': { trades: [], pnl: 0 },
+    'Geen score': { trades: [], pnl: 0 }
+  };
+  
+  data_set.forEach(t => {
+    let bucket;
+    if (t.checklistScore === null || t.checklistScore === undefined) bucket = 'Geen score';
+    else if (t.checklistScore >= 40) bucket = 'Score 40+ (volledig live)';
+    else if (t.checklistScore >= 30) bucket = 'Score 30-39 (halve risk)';
+    else bucket = 'Score <30 (geen trade)';
+    
+    buckets[bucket].trades.push(t);
+    buckets[bucket].pnl += t.pnl;
+  });
+  
+  let html = '<div class="card" style="background:#0f172a;">';
+  for (const [name, data] of Object.entries(buckets)) {
+    if (data.trades.length === 0) continue;
+    const avg = data.pnl / data.trades.length;
+    const wins = data.trades.filter(t => isWin(t)).length;
+    const losses = data.trades.filter(t => isLoss(t)).length;
+    const decisive = wins + losses;
+    const wr = decisive > 0 ? (wins / decisive * 100).toFixed(0) : '-';
+    html += `<div class="breakdown-row">
+      <span><strong>${name}</strong> (${data.trades.length} trades, ${wr}% WR)</span>
+      <span class="${avg>=0?'pnl-positive':'pnl-negative'}">Avg: €${avg.toFixed(2)}</span>
+    </div>`;
+  }
+  html += '</div>';
+  return html;
+}
+
+function renderEmotionCorrelations(trades) {
+  const data_set = trades || state.trades;
+  const emotions = ['stress', 'confidence', 'fomo', 'frustration', 'satisfaction'];
+  const emotionLabels = {
+    stress: 'Stress vooraf',
+    confidence: 'Vertrouwen vooraf',
+    fomo: 'FOMO vooraf',
+    frustration: 'Frustratie na',
+    satisfaction: 'Tevredenheid na'
+  };
+  
+  let html = '<div class="card" style="background:#0f172a;"><div style="font-size:13px; color:#94a3b8; margin-bottom:12px;">Avg P&L per emotie-niveau (1-3 = laag, 4-7 = midden, 8-10 = hoog)</div>';
+  
+  emotions.forEach(em => {
+    const buckets = { laag: { pnl: 0, count: 0 }, midden: { pnl: 0, count: 0 }, hoog: { pnl: 0, count: 0 } };
+    data_set.forEach(t => {
+      if (!t.emotions || t.emotions[em] === undefined) return;
+      const v = t.emotions[em];
+      const b = v <= 3 ? 'laag' : v <= 7 ? 'midden' : 'hoog';
+      buckets[b].pnl += t.pnl;
+      buckets[b].count++;
+    });
+    
+    html += `<div style="margin-bottom:14px;"><strong>${emotionLabels[em]}:</strong>`;
+    for (const [name, data] of Object.entries(buckets)) {
+      if (data.count === 0) continue;
+      const avg = data.pnl / data.count;
+      html += ` <span style="margin-left:8px;">${name} (${data.count}): <span class="${avg>=0?'pnl-positive':'pnl-negative'}">€${avg.toFixed(2)}</span></span>`;
+    }
+    html += '</div>';
+  });
+  
+  html += '</div>';
+  return html;
+}
+
+function renderPatterns(trades) {
+  const data_set = trades || state.trades;
+  const patterns = [];
+  
+  // ====== Stopped-out / premature-exit patterns ======
+  // Pattern: stopped out but trade went the right way afterwards
+  const stoppedThenWent = data_set.filter(t => t.evaluation && t.evaluation.stoppedOut === 'went_after');
+  const stoppedNeverWorked = data_set.filter(t => t.evaluation && t.evaluation.stoppedOut === 'never_worked');
+  if (stoppedThenWent.length >= 2) {
+    const totalLoss = stoppedThenWent.reduce((s, t) => s + t.pnl, 0);
+    patterns.push(`🎯 <strong>${stoppedThenWent.length}x uitgetikt waarna de trade alsnog vertrok.</strong> Totaal verlies: €${totalLoss.toFixed(2)}. Mogelijk: SL te strak, te snel SL opgeschoven, of te vroeg ingestapt voor confirmatie.`);
+  }
+  if (stoppedNeverWorked.length >= 2) {
+    patterns.push(`✓ ${stoppedNeverWorked.length}x uitgetikt en trade werkte écht niet — die SL deed zijn werk. Geen verbeterpunt nodig op exit.`);
+  }
+  // Compare ratio if both buckets have data
+  if (stoppedThenWent.length >= 2 && stoppedNeverWorked.length >= 2) {
+    const total = stoppedThenWent.length + stoppedNeverWorked.length;
+    const pct = (stoppedThenWent.length / total * 100).toFixed(0);
+    patterns.push(`📐 Van alle uitgetikte trades: <strong>${pct}%</strong> liep daarna alsnog jouw richting op. Als dit boven 40% zit, ligt het probleem in je stop-loss plaatsing.`);
+  }
+  
+  // Pattern: manual close where trade went on without you
+  const manualWentAfter = data_set.filter(t => t.evaluation && t.evaluation.manualClose === 'manual_went_after');
+  const manualNeverWorked = data_set.filter(t => t.evaluation && t.evaluation.manualClose === 'manual_never_worked');
+  if (manualWentAfter.length >= 2) {
+    patterns.push(`😤 <strong>${manualWentAfter.length}x gevoelsmatig te vroeg gesloten — de trade vertrok daarna alsnog.</strong> Dit is gemiste winst door ongeduld of angst. Hou je aan je target/plan.`);
+  }
+  if (manualWentAfter.length >= 2 && manualNeverWorked.length >= 2) {
+    const total = manualWentAfter.length + manualNeverWorked.length;
+    const pct = (manualWentAfter.length / total * 100).toFixed(0);
+    patterns.push(`📐 Van je gevoelsmatige sluitingen was <strong>${pct}%</strong> te vroeg (vertrok daarna alsnog). Als dit hoog is, sluit je uit emotie i.p.v. op basis van je plan.`);
+  }
+  
+  // Pattern: manual exits (gevoelsmatig gesloten)
+  const manualExits = data_set.filter(t => t.evaluation && t.evaluation.exit === 'manual_exit');
+  if (manualExits.length >= 3) {
+    const manualAvg = manualExits.reduce((s,t)=>s+t.pnl,0) / manualExits.length;
+    const allOtherExits = data_set.filter(t => t.evaluation && t.evaluation.exit && t.evaluation.exit !== 'manual_exit');
+    if (allOtherExits.length >= 3) {
+      const otherAvg = allOtherExits.reduce((s,t)=>s+t.pnl,0) / allOtherExits.length;
+      const diff = manualAvg - otherAvg;
+      const diffSign = diff >= 0 ? '+' : '';
+      patterns.push(`✋ Handmatig gesloten trades (${manualExits.length}x): avg €${manualAvg.toFixed(2)} | Met plan-exit (${allOtherExits.length}x): avg €${otherAvg.toFixed(2)}. Verschil: <strong>${diffSign}€${diff.toFixed(2)}</strong> per trade ${diff < 0 ? '— gevoelsmatig sluiten kost je geld.' : '— gevoelsmatig sluiten lijkt te werken (maar n is klein, wees voorzichtig).'}`);
+    }
+  }
+  
+  // Duration patterns
+  const withDuration = data_set.filter(t => t.durationMinutes !== null && t.durationMinutes !== undefined);
+  if (withDuration.length >= 6) {
+    const winningTrades = withDuration.filter(t => isWin(t));
+    const losingTrades = withDuration.filter(t => isLoss(t));
+    if (winningTrades.length >= 3 && losingTrades.length >= 3) {
+      const avgWinDur = winningTrades.reduce((s, t) => s + t.durationMinutes, 0) / winningTrades.length;
+      const avgLossDur = losingTrades.reduce((s, t) => s + t.durationMinutes, 0) / losingTrades.length;
+      patterns.push(`⏱️ Gemiddelde duur winning trades: <strong>${formatDuration(Math.round(avgWinDur))}</strong> | Losing trades: <strong>${formatDuration(Math.round(avgLossDur))}</strong>.`);
+    }
+    const quickTrades = withDuration.filter(t => t.durationMinutes < 5);
+    if (quickTrades.length >= 3) {
+      const quickAvg = quickTrades.reduce((s,t)=>s+t.pnl,0)/quickTrades.length;
+      if (quickAvg < 0) {
+        patterns.push(`⚡ Trades onder 5 min (${quickTrades.length}x) verliezen gemiddeld €${quickAvg.toFixed(2)}. Te snel ingestapt of te snel uitgestapt?`);
+      }
+    }
+  }
+  
+  // Pre-trade check correlation
+  const ptFullTrades = data_set.filter(t => t.preTradeCheck && t.preTradeCheck._totalChecked === t.preTradeCheck._totalChecks);
+  const ptPartialTrades = data_set.filter(t => t.preTradeCheck && t.preTradeCheck._totalChecked > 0 && t.preTradeCheck._totalChecked < t.preTradeCheck._totalChecks);
+  if (ptFullTrades.length >= 3 && ptPartialTrades.length >= 3) {
+    const fullAvg = ptFullTrades.reduce((s,t)=>s+t.pnl,0)/ptFullTrades.length;
+    const partAvg = ptPartialTrades.reduce((s,t)=>s+t.pnl,0)/ptPartialTrades.length;
+    patterns.push(`📊 Volledige Pre-Trade Check ✓ (${ptFullTrades.length}x): avg €${fullAvg.toFixed(2)} | Onvolledige (${ptPartialTrades.length}x): avg €${partAvg.toFixed(2)}.`);
+  }
+  
+  // Pre-trade critical missing
+  const ptMissedCritical = data_set.filter(t => t.preTradeCheck && t.preTradeCheck._criticalCount < t.preTradeCheck._criticalTotal);
+  if (ptMissedCritical.length >= 3) {
+    const avg = ptMissedCritical.reduce((s,t)=>s+t.pnl,0)/ptMissedCritical.length;
+    if (avg < 0) {
+      patterns.push(`🚨 Trades met gemiste KRITIEKE pre-checks (${ptMissedCritical.length}x) verliezen gemiddeld €${avg.toFixed(2)}. NOOIT meer doen.`);
+    }
+  }
+  
+  // Pattern 1: Best instrument
+  const byInstrument = {};
+  data_set.forEach(t => {
+    if (!byInstrument[t.instrument]) byInstrument[t.instrument] = { pnl: 0, count: 0 };
+    byInstrument[t.instrument].pnl += t.pnl;
+    byInstrument[t.instrument].count++;
+    });
+  const bestInst = Object.entries(byInstrument).sort((a,b) => (b[1].pnl/b[1].count) - (a[1].pnl/a[1].count))[0];
+  const worstInst = Object.entries(byInstrument).sort((a,b) => (a[1].pnl/a[1].count) - (b[1].pnl/b[1].count))[0];
+  if (bestInst && bestInst[1].count >= 3) {
+    patterns.push(`✅ Je beste instrument is <strong>${bestInst[0]}</strong> met €${(bestInst[1].pnl/bestInst[1].count).toFixed(2)} avg per trade.`);
+  }
+  if (worstInst && worstInst[1].count >= 3 && worstInst[0] !== bestInst[0] && worstInst[1].pnl/worstInst[1].count < 0) {
+    patterns.push(`⚠️ <strong>${worstInst[0]}</strong> is je verlieslatige instrument met €${(worstInst[1].pnl/worstInst[1].count).toFixed(2)} avg. Overweeg te stoppen.`);
+  }
+  
+  // Pattern 2: Plan adherence impact
+  const planTrades = data_set.filter(t => t.planFollowed === 'ja');
+  const noPlanTrades = data_set.filter(t => t.planFollowed === 'nee');
+  if (planTrades.length >= 3 && noPlanTrades.length >= 3) {
+    const planAvg = planTrades.reduce((s,t)=>s+t.pnl,0)/planTrades.length;
+    const noPlanAvg = noPlanTrades.reduce((s,t)=>s+t.pnl,0)/noPlanTrades.length;
+    patterns.push(`📊 Met plan: avg €${planAvg.toFixed(2)} | Zonder plan: avg €${noPlanAvg.toFixed(2)}. Verschil: €${(planAvg-noPlanAvg).toFixed(2)}.`);
+  }
+  
+  // Pattern 3: High FOMO trades
+  const highFomo = data_set.filter(t => t.emotions && t.emotions.fomo >= 7);
+  if (highFomo.length >= 3) {
+    const avgFomo = highFomo.reduce((s,t)=>s+t.pnl,0)/highFomo.length;
+    if (avgFomo < 0) {
+      patterns.push(`🚨 Trades met hoge FOMO (${highFomo.length}x) verliezen gemiddeld €${avgFomo.toFixed(2)}. STOP met FOMO trades.`);
+    }
+  }
+  
+  // Pattern 4: Low checklist score impact
+  const lowScoreTrades = data_set.filter(t => t.checklistScore && t.checklistScore < 38);
+  const highScoreTrades = data_set.filter(t => t.checklistScore && t.checklistScore >= 40);
+  if (lowScoreTrades.length >= 3 && highScoreTrades.length >= 3) {
+    const lowAvg = lowScoreTrades.reduce((s,t)=>s+t.pnl,0)/lowScoreTrades.length;
+    const highAvg = highScoreTrades.reduce((s,t)=>s+t.pnl,0)/highScoreTrades.length;
+    patterns.push(`📈 Hoge checklist score (40+): avg €${highAvg.toFixed(2)} | Lage score (<38): avg €${lowAvg.toFixed(2)}.`);
+  }
+  
+  // Pattern 5: Best time block
+  const byTime = {};
+  data_set.forEach(t => {
+    if (!byTime[t.timeBlock]) byTime[t.timeBlock] = { pnl: 0, count: 0 };
+    byTime[t.timeBlock].pnl += t.pnl;
+    byTime[t.timeBlock].count++;
+  });
+  const bestTime = Object.entries(byTime).filter(([,d])=>d.count>=3).sort((a,b) => (b[1].pnl/b[1].count) - (a[1].pnl/a[1].count))[0];
+  if (bestTime) {
+    patterns.push(`⏰ Beste tijdsblok: <strong>${bestTime[0]}</strong> met €${(bestTime[1].pnl/bestTime[1].count).toFixed(2)} avg.`);
+  }
+  
+  // Pattern 6: Direction bias
+  const longs = data_set.filter(t => t.direction === 'long');
+  const shorts = data_set.filter(t => t.direction === 'short');
+  if (longs.length >= 5 && shorts.length >= 5) {
+    const longAvg = longs.reduce((s,t)=>s+t.pnl,0)/longs.length;
+    const shortAvg = shorts.reduce((s,t)=>s+t.pnl,0)/shorts.length;
+    if (Math.abs(longAvg - shortAvg) > 50) {
+      patterns.push(`🔄 Long avg: €${longAvg.toFixed(2)} | Short avg: €${shortAvg.toFixed(2)}. Je hebt een richting-bias.`);
+    }
+  }
+  
+  if (patterns.length === 0) {
+    return '<div class="empty-state">Niet genoeg data voor patronen. Blijf loggen.</div>';
+  }
+  
+  let html = '<div class="card" style="background:#0f172a;">';
+  patterns.forEach(p => {
+    html += `<div style="padding:12px; margin-bottom:8px; background:#1e293b; border-radius:6px; border-left:3px solid #3b82f6; font-size:14px;">${p}</div>`;
+  });
+  html += '</div>';
+  return html;
+}
+
+// ==================== SETTINGS ====================
+async function saveSettings() {
+  state.settings.maxTrades = parseInt(document.getElementById('settingMaxTrades').value);
+  state.settings.dailyLoss = parseFloat(document.getElementById('settingDailyLoss').value);
+  state.settings.riskPerTrade = parseFloat(document.getElementById('settingRiskPerTrade').value);
+  state.settings.breakevenThreshold = parseFloat(document.getElementById('settingBreakevenThreshold').value) || 0;
+  
+  try {
+    await cloudStorage.upsert('settings', { user_id: currentUser.id, data: state.settings }, 'user_id');
+    showToast('Instellingen opgeslagen');
+    // Re-render insights and today's trades since classification changed
+    renderInsights();
+    renderTodayTrades();
+  } catch (err) {
+    showToast('Fout: ' + err.message, true);
+  }
+}
+
+function loadSettings() {
+  document.getElementById('settingMaxTrades').value = state.settings.maxTrades;
+  document.getElementById('settingDailyLoss').value = state.settings.dailyLoss;
+  document.getElementById('settingRiskPerTrade').value = state.settings.riskPerTrade;
+  document.getElementById('settingBreakevenThreshold').value = state.settings.breakevenThreshold !== undefined ? state.settings.breakevenThreshold : 5;
+  renderInstrumentOptions();
+}
+
+// ==================== EXPORT / RESET ====================
+function exportData() {
+  const data = {
+    exportDate: new Date().toISOString(),
+    trades: state.trades,
+    checklistHistory: state.checklistHistory,
+    dayReviews: state.dayReviews,
+    settings: state.settings
+  };
+  const blob = new Blob([JSON.stringify(data, null, 2)], {type: 'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `trading-journal-${today()}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+  showToast('Data geëxporteerd');
+}
+
+async function resetAllData() {
+  if (!confirm('Zeker weten? Alle trades, checklists en reviews worden verwijderd. Je INSTELLINGEN (max trades, daily loss, risk per trade) blijven bewaard. Dit kan niet ongedaan worden gemaakt.')) return;
+  if (!confirm('Echt zeker? Maak eerst een export!')) return;
+  
+  // Keep current settings
+  const preservedSettings = { ...state.settings };
+  
+  try {
+    // Delete all trades
+    for (const t of state.trades) {
+      try { await cloudStorage.delete('trades', 'id', t.id); } catch(e) {}
+    }
+    // Delete all checklists
+    for (const c of state.checklistHistory) {
+      try { await cloudStorage.delete('checklists', 'date', c.date); } catch(e) {}
+    }
+    // Delete all reviews
+    for (const r of state.dayReviews) {
+      try { await cloudStorage.delete('reviews', 'date', r.date); } catch(e) {}
+    }
+    // NOTE: settings are NOT deleted - they are preserved
+    
+    state = {
+      todayChecklist: null,
+      trades: [],
+      checklistHistory: [],
+      dayReviews: [],
+      settings: preservedSettings
+    };
+    
+    showToast('Trades, checklists en reviews gereset. Instellingen behouden.');
+    renderChecklist();
+    renderTodayTrades();
+    renderHistory();
+    renderInsights();
+    loadSettings();
+    renderInstrumentOptions();
+  } catch (err) {
+    showToast('Fout bij reset: ' + err.message, true);
+  }
+}
+
+// ==================== UI ====================
+function showToast(msg, isError = false) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast' + (isError ? ' error show' : ' show');
+  setTimeout(() => t.className = 'toast' + (isError ? ' error' : ''), 3000);
+}
+
+function switchToPanel(panelName) {
+  document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  const btn = document.querySelector(`nav button[data-panel="${panelName}"]`);
+  if (btn) btn.classList.add('active');
+  const panel = document.getElementById('panel-' + panelName);
+  if (panel) panel.classList.add('active');
+  
+  // Render content for the panel
+  if (panelName === 'pretrade') renderPreTradeCheck();
+  if (panelName === 'strategies') renderStrategies();
+  if (panelName === 'trades') { updateTradeWarning(); renderTodayTrades(); }
+  if (panelName === 'history') renderHistory();
+  if (panelName === 'insights') renderInsights();
+  if (panelName === 'dayreview') { renderDayStats(); updateDayReviewSavedInfo(); }
+  if (panelName === 'settings') loadSettings();
+}
+
+function setupNavigation() {
+  document.querySelectorAll('nav button').forEach(btn => {
+    btn.addEventListener('click', () => {
+      // If leaving trade logging while editing, cancel edit mode
+      if (editingTradeId && btn.dataset.panel !== 'trades') {
+        cancelEditMode();
+      }
+      switchToPanel(btn.dataset.panel);
+    });
+  });
+}
+
+function showDate() {
+  const d = new Date();
+  document.getElementById('dateDisplay').textContent = d.toLocaleDateString('nl-BE', {
+    weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
+  });
+}
+
+// ==================== INIT ====================
+async function init() {
+  showDate();
+  setupNavigation();
+  setupPasteHandler();
+  
+  // Wait for Supabase library to be available (max 5 seconds)
+  let waited = 0;
+  while (!window.supabase && waited < 5000) {
+    await new Promise(r => setTimeout(r, 100));
+    waited += 100;
+  }
+  
+  if (!window.supabase) {
+    document.getElementById('loadingChecklist').textContent = 
+      'Fout: Supabase library kon niet laden. Check je internet en ververs de pagina.';
+    return;
+  }
+  
+  // Always hide loading and show content area (even if not authenticated yet)
+  document.getElementById('loadingChecklist').style.display = 'none';
+  document.getElementById('checklistContent').style.display = 'block';
+  
+  const authenticated = await checkAuth();
+  if (!authenticated) {
+    // Modal is showing - render empty state
+    renderChecklist();
+    return;
+  }
+  
+  await loadAllData();
+  
+  renderChecklist();
+  renderTodayTrades();
+  loadSettings();
+  updateTradeWarning();
+}
+
+// Wait for both DOM and Supabase library to load before init
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', init);
+} else {
+  init();
+}
+</script>
+</body>
+</html>
