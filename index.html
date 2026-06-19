@@ -2948,6 +2948,7 @@ function renderHistory() {
     allEl.innerHTML = '<div class="empty-state">Nog geen trades.</div>';
   } else {
     let html = '<table><thead><tr><th>Datum</th><th>Entry</th><th>Exit</th><th>Duur</th><th>Instrument</th><th>Richting</th><th>Setup</th><th>P&L</th><th>R</th><th>2R advies</th><th>BE-shift advies</th><th>Plan?</th><th>Score</th><th>Acties</th></tr></thead><tbody>';
+    let prevDate = null;
     state.trades.forEach(t => {
       const d = new Date(t.timestamp);
       const entryTime = t.exactTime || d.toLocaleTimeString('nl-BE', {hour:'2-digit', minute:'2-digit'});
@@ -2955,11 +2956,30 @@ function renderHistory() {
       const duration = t.durationMinutes !== null && t.durationMinutes !== undefined 
         ? formatDuration(t.durationMinutes) 
         : '-';
-      // R-multiple
+      // Day separator: thick top border when date changes (vs previous row)
+      const isNewDay = prevDate !== null && t.date !== prevDate;
+      const rowStyle = isNewDay ? ' style="border-top:2px solid #475569;"' : '';
+      prevDate = t.date;
+      // Trade classification (used for BE-grey on P&L and R columns)
+      const cls = classifyTrade(t);
+      const isBE = cls === 'breakeven';
+      // R-multiple — BE in grey
       const r = getRMultiple(t);
-      const rCell = r !== null 
-        ? `<span class="${r>0?'pnl-positive':r<0?'pnl-negative':''}">${r>=0?'+':''}${r.toFixed(2)}R</span>`
-        : '<span style="color:#64748b;">—</span>';
+      let rCell;
+      if (r === null) {
+        rCell = '<span style="color:#64748b;">—</span>';
+      } else if (isBE) {
+        rCell = `<span style="color:#94a3b8;">${r>=0?'+':''}${r.toFixed(2)}R</span>`;
+      } else {
+        rCell = `<span class="${r>0?'pnl-positive':r<0?'pnl-negative':''}">${r>=0?'+':''}${r.toFixed(2)}R</span>`;
+      }
+      // P&L cell — BE in grey
+      let pnlCell;
+      if (isBE) {
+        pnlCell = `<td style="color:#94a3b8;">€${t.pnl.toFixed(2)}</td>`;
+      } else {
+        pnlCell = `<td class="${t.pnl>=0?'pnl-positive':'pnl-negative'}">€${t.pnl.toFixed(2)}</td>`;
+      }
       // 2R advice column
       let adviceCell = '<span style="color:#475569;">—</span>';
       if (touched2R(t)) {
@@ -2993,7 +3013,7 @@ function renderHistory() {
         <button class="secondary" style="padding:4px 8px; font-size:11px;" onclick="showTradeScreenshot('${t.id}')" title="Bekijk details">${ssLabel}Bekijk</button>
         <button class="secondary" style="padding:4px 8px; font-size:11px;" onclick="editTrade('${t.id}')" title="Bewerken">✏️</button>
       </div>`;
-      html += `<tr>
+      html += `<tr${rowStyle}>
         <td>${d.toLocaleDateString('nl-BE')}</td>
         <td>${entryTime}</td>
         <td>${exitTime}</td>
@@ -3001,7 +3021,7 @@ function renderHistory() {
         <td>${t.instrument}</td>
         <td>${t.direction}</td>
         <td>${t.setup || '-'}</td>
-        <td class="${t.pnl>=0?'pnl-positive':'pnl-negative'}">€${t.pnl.toFixed(2)}</td>
+        ${pnlCell}
         <td>${rCell}</td>
         <td>${adviceCell}</td>
         <td>${beShiftCell}</td>
@@ -3054,7 +3074,9 @@ function renderHistory() {
 
 // ==================== INSIGHTS ====================
 let insightsFilterInstrument = 'all';
-let insightsFilterPeriod = 'all'; // 'all', 'today', 'week', 'month'
+let insightsFilterPeriod = 'all'; // 'all', 'today', 'week', 'month', 'this_month', 'last_month', 'custom'
+let insightsCustomStart = ''; // YYYY-MM-DD
+let insightsCustomEnd = '';   // YYYY-MM-DD
 
 function setInsightsFilter(value) {
   insightsFilterInstrument = value;
@@ -3066,11 +3088,29 @@ function setInsightsPeriod(value) {
   renderInsights();
 }
 
+function setInsightsCustomStart(value) {
+  insightsCustomStart = value;
+  if (insightsFilterPeriod === 'custom') renderInsights();
+}
+
+function setInsightsCustomEnd(value) {
+  insightsCustomEnd = value;
+  if (insightsFilterPeriod === 'custom') renderInsights();
+}
+
+// Helper: YYYY-MM-DD for a Date
+function toDateStr(d) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
 // Filter trades by selected period
 function filterByPeriod(trades, period) {
   if (period === 'all') return trades;
   const now = new Date();
-  const todayStr = now.toISOString().split('T')[0];
+  const todayStr = toDateStr(now);
   
   if (period === 'today') {
     return trades.filter(t => t.date === todayStr);
@@ -3079,15 +3119,37 @@ function filterByPeriod(trades, period) {
     // Last 7 days (rolling)
     const weekAgo = new Date(now);
     weekAgo.setDate(weekAgo.getDate() - 7);
-    const weekAgoStr = weekAgo.toISOString().split('T')[0];
+    const weekAgoStr = toDateStr(weekAgo);
     return trades.filter(t => t.date >= weekAgoStr);
   }
   if (period === 'month') {
     // Last 30 days (rolling)
     const monthAgo = new Date(now);
     monthAgo.setDate(monthAgo.getDate() - 30);
-    const monthAgoStr = monthAgo.toISOString().split('T')[0];
+    const monthAgoStr = toDateStr(monthAgo);
     return trades.filter(t => t.date >= monthAgoStr);
+  }
+  if (period === 'this_month') {
+    // Calendar month: from 1st of current month until today
+    const start = new Date(now.getFullYear(), now.getMonth(), 1);
+    const startStr = toDateStr(start);
+    return trades.filter(t => t.date >= startStr && t.date <= todayStr);
+  }
+  if (period === 'last_month') {
+    // Calendar month: full previous month
+    const start = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const end = new Date(now.getFullYear(), now.getMonth(), 0); // last day of prev month
+    const startStr = toDateStr(start);
+    const endStr = toDateStr(end);
+    return trades.filter(t => t.date >= startStr && t.date <= endStr);
+  }
+  if (period === 'custom') {
+    if (!insightsCustomStart && !insightsCustomEnd) return trades;
+    return trades.filter(t => {
+      if (insightsCustomStart && t.date < insightsCustomStart) return false;
+      if (insightsCustomEnd && t.date > insightsCustomEnd) return false;
+      return true;
+    });
   }
   return trades;
 }
@@ -3336,12 +3398,25 @@ function renderInsights() {
     'all': 'Alle tijd',
     'today': 'Vandaag',
     'week': 'Laatste 7 dagen',
-    'month': 'Laatste 30 dagen'
+    'month': 'Laatste 30 dagen',
+    'this_month': 'Deze maand',
+    'last_month': 'Vorige maand',
+    'custom': 'Eigen periode...'
   };
   for (const [val, label] of Object.entries(periodLabels)) {
     filterHtml += `<option value="${val}" ${insightsFilterPeriod===val?'selected':''}>${label}</option>`;
   }
   filterHtml += '</select></div>';
+  
+  // Custom date range inputs (only visible when period === 'custom')
+  if (insightsFilterPeriod === 'custom') {
+    filterHtml += '<div style="display:flex; align-items:center; gap:8px;">';
+    filterHtml += '<label style="font-size:13px; color:#94a3b8;">Van:</label>';
+    filterHtml += `<input type="date" value="${insightsCustomStart}" onchange="setInsightsCustomStart(this.value)" style="background:#0f172a; border:1px solid #334155; color:#e2e8f0; padding:7px 10px; border-radius:6px; font-size:13px;">`;
+    filterHtml += '<label style="font-size:13px; color:#94a3b8; margin-left:4px;">Tot:</label>';
+    filterHtml += `<input type="date" value="${insightsCustomEnd}" onchange="setInsightsCustomEnd(this.value)" style="background:#0f172a; border:1px solid #334155; color:#e2e8f0; padding:7px 10px; border-radius:6px; font-size:13px;">`;
+    filterHtml += '</div>';
+  }
   
   // Instrument filter (counts based on period-filtered set)
   const periodFiltered = filterByPeriod(state.trades, insightsFilterPeriod);
