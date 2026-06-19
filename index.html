@@ -538,7 +538,7 @@
           <select id="tradeInstrument" onchange="handleInstrumentChange()">
             <option value="DAX">DAX</option>
             <option value="UK100">UK100</option>
-            <option value="XAU">XAU (Goud)</option>
+            <option value="XAU" selected>XAU (Goud)</option>
             <option value="US30">US30</option>
             <option value="US100">US100</option>
             <option value="US500">US500</option>
@@ -557,7 +557,7 @@
         </div>
         <div class="form-group">
           <label>Sessie</label>
-          <select id="tradeSession">
+          <select id="tradeSession" onchange="handleSessionChange()">
             <option value="voormiddag">Voormiddag (9-11u)</option>
             <option value="namiddag">Namiddag (15:30-17:30u)</option>
             <option value="ander">Ander</option>
@@ -638,7 +638,8 @@
           <label>Verbeterpunt</label>
           <select id="tradeImprovement">
             <option value="">-- Selecteer (optioneel) --</option>
-            <option value="setup_correct">Setup was correct, geen verbeterpunten</option>
+            <option value="setup_correct" selected>Setup was correct, geen verbeterpunten</option>
+            <option value="invalid_trade">Ongeldige trade (had niet genomen mogen worden)</option>
             <option value="entry_too_early">Entry te vroeg genomen</option>
             <option value="entry_too_late">Entry te laat genomen</option>
             <option value="sl_too_tight">Stoploss te strak</option>
@@ -657,7 +658,7 @@
           <select id="evalDailyTrend">
             <option value="">-- Selecteer --</option>
             <option value="ja">Ja</option>
-            <option value="nee">Nee</option>
+            <option value="nee" selected>Nee</option>
           </select>
         </div>
         <div class="form-group">
@@ -670,6 +671,8 @@
             <option value="AsiaL">Asia Low (AL)</option>
             <option value="LondonH">London High (LH)</option>
             <option value="LondonL">London Low (LL)</option>
+            <option value="RangeTop">Range Top</option>
+            <option value="RangeBottom" selected>Range Bottom</option>
             <option value="other_key">Ander key level</option>
             <option value="none">Geen level</option>
           </select>
@@ -678,7 +681,7 @@
           <label>Trade tov level</label>
           <select id="evalLevelPrecision">
             <option value="">-- Selecteer --</option>
-            <option value="exact">Exact op het level</option>
+            <option value="exact" selected>Exact op het level</option>
             <option value="near">In de buurt van het level</option>
             <option value="far">Niet bij een level</option>
           </select>
@@ -690,14 +693,14 @@
             <option value="ja">Ja</option>
             <option value="nee">Nee</option>
             <option value="mixed">Gemengd</option>
-            <option value="not_checked">Niet bekeken</option>
+            <option value="not_checked" selected>Niet bekeken</option>
           </select>
         </div>
         <div class="form-group">
           <label>Timeframe entry</label>
           <select id="evalTimeframe">
             <option value="">-- Selecteer --</option>
-            <option value="1min">1 min</option>
+            <option value="1min" selected>1 min</option>
             <option value="2min">2 min</option>
             <option value="3min">3 min</option>
             <option value="5min">5 min</option>
@@ -709,7 +712,7 @@
           <select id="evalHammer">
             <option value="">-- Selecteer --</option>
             <option value="ja">Ja</option>
-            <option value="nee">Nee</option>
+            <option value="nee" selected>Nee</option>
           </select>
         </div>
         <div class="form-group">
@@ -718,7 +721,7 @@
             <option value="">-- Selecteer (alleen bij verlies) --</option>
             <option value="went_after">Uitgetikt, trade vertrok daarna alsnog</option>
             <option value="never_worked">Uitgetikt, trade deed nooit wat zou moeten</option>
-            <option value="not_applicable">Niet uitgetikt / N/A</option>
+            <option value="not_applicable" selected>Niet uitgetikt / N/A</option>
           </select>
         </div>
         <div class="form-group">
@@ -727,7 +730,7 @@
             <option value="">-- Selecteer (alleen bij handmatige exit) --</option>
             <option value="manual_went_after">Vertrok daarna alsnog (te vroeg gesloten)</option>
             <option value="manual_never_worked">Deed nooit wat zou moeten (terecht gesloten)</option>
-            <option value="manual_na">Niet gevoelsmatig gesloten / N/A</option>
+            <option value="manual_na" selected>Niet gevoelsmatig gesloten / N/A</option>
           </select>
         </div>
         <div class="form-group">
@@ -736,7 +739,7 @@
             <option value="">-- Selecteer --</option>
             <option value="positive">Ja, positief (steun/weerstand werkte)</option>
             <option value="negative">Ja, negatief (door VWAP gebroken)</option>
-            <option value="neutral">Geen merkbare invloed</option>
+            <option value="neutral" selected>Geen merkbare invloed</option>
           </select>
         </div>
         <div class="form-group">
@@ -746,22 +749,36 @@
             <option value="2R_secured">2R gepakt</option>
             <option value="trailed_sl">SL mee verschoven (+2R)</option>
             <option value="manual_exit">Handmatig gesloten</option>
-            <option value="stopped_out">Stoploss geraakt</option>
+            <option value="stopped_out" selected>Stoploss geraakt</option>
           </select>
         </div>
-        <div class="form-group" style="background:#1e293b; padding:12px; border-radius:8px; border-left:3px solid #60a5fa;">
-          <label style="display:flex; align-items:center; gap:10px; cursor:pointer; margin-bottom:0;">
-            <input type="checkbox" id="evalTouched2R" style="width:18px; height:18px; cursor:pointer;">
-            <span style="font-weight:600;">Trade heeft 2R aangeraakt tijdens het verloop</span>
+        <div class="form-group">
+          <label>1R aangeraakt?</label>
+          <label style="display:flex; align-items:center; gap:8px; cursor:pointer; padding:8px 12px; background:#0f172a; border:1px solid #334155; border-radius:6px; min-height:38px;">
+            <input type="checkbox" id="evalTouched1R" style="width:16px; height:16px; cursor:pointer; margin:0;">
+            <span style="font-size:13px;">Ja, prijs raakte 1R</span>
           </label>
-          <div style="font-size:11px; color:#94a3b8; margin-top:6px; margin-left:28px;">Vink aan als de prijs op enig moment het 2R-niveau heeft bereikt. Dit is essentieel voor de "2R pakken of laten lopen?" analyse in Inzichten.</div>
+        </div>
+        <div class="form-group">
+          <label>2R aangeraakt?</label>
+          <label style="display:flex; align-items:center; gap:8px; cursor:pointer; padding:8px 12px; background:#0f172a; border:1px solid #334155; border-radius:6px; min-height:38px;">
+            <input type="checkbox" id="evalTouched2R" style="width:16px; height:16px; cursor:pointer; margin:0;">
+            <span style="font-size:13px;">Ja, prijs raakte 2R</span>
+          </label>
+        </div>
+        <div class="form-group">
+          <label>SL verschoven naar BE?</label>
+          <label style="display:flex; align-items:center; gap:8px; cursor:pointer; padding:8px 12px; background:#0f172a; border:1px solid #334155; border-radius:6px; min-height:38px;">
+            <input type="checkbox" id="evalSLToBE" style="width:16px; height:16px; cursor:pointer; margin:0;">
+            <span style="font-size:13px;">Ja, naar BE na 1R</span>
+          </label>
         </div>
         <div class="form-group">
           <label>ATR invloed?</label>
           <select id="evalAtr">
             <option value="">-- Selecteer --</option>
             <option value="ja">Ja</option>
-            <option value="nee">Nee</option>
+            <option value="nee" selected>Nee</option>
             <option value="nvt">N/A</option>
           </select>
         </div>
@@ -770,7 +787,7 @@
           <select id="evalMentorFollowed" onchange="toggleMentorNameField()">
             <option value="">-- Selecteer --</option>
             <option value="ja">Ja</option>
-            <option value="nee">Nee</option>
+            <option value="nee" selected>Nee</option>
           </select>
         </div>
         <div class="form-group" id="mentorNameGroup" style="display:none;">
@@ -911,12 +928,23 @@
   <div class="panel" id="panel-settings">
     <div class="card">
       <h2>Instellingen</h2>
-      <div class="form-group" style="margin-bottom:16px;">
-        <label>Maximum trades per dag</label>
-        <input type="number" id="settingMaxTrades" value="3" min="1" max="20">
+      <div class="info-box" style="margin-bottom:16px; font-size:12px;">
+        Dagelijkse R-limieten beschermen je tegen revenge-trading en oververtrouwen. Bij -3R = de markt zegt nee vandaag. Bij +6R = je hebt genoeg, ga niet alles terug weggeven.
+      </div>
+      <div class="form-grid" style="margin-bottom:16px;">
+        <div class="form-group">
+          <label>Daily loss limiet (R)</label>
+          <input type="number" id="settingMaxLossR" value="3" min="1" max="10" step="0.5">
+          <div style="font-size:11px; color:#94a3b8; margin-top:4px;">Stop met traden vanaf -X R (default: -3R)</div>
+        </div>
+        <div class="form-group">
+          <label>Daily profit limiet (R)</label>
+          <input type="number" id="settingMaxProfitR" value="6" min="1" max="20" step="0.5">
+          <div style="font-size:11px; color:#94a3b8; margin-top:4px;">Stop met traden vanaf +X R (default: +6R)</div>
+        </div>
       </div>
       <div class="form-group" style="margin-bottom:16px;">
-        <label>Daily loss limit (€)</label>
+        <label>Daily loss limit (€) — back-up limiet in euro</label>
         <input type="number" id="settingDailyLoss" value="500" min="0">
       </div>
       <div class="form-group" style="margin-bottom:16px;">
@@ -1397,7 +1425,7 @@ let state = {
   trades: [],
   checklistHistory: [],
   dayReviews: [],
-  settings: { maxTrades: 3, dailyLoss: 500, riskPerTrade: 1, breakevenThreshold: 5, customInstruments: [] }
+  settings: { maxLossR: 3, maxProfitR: 6, dailyLoss: 500, riskPerTrade: 1, breakevenThreshold: 5, customInstruments: [] }
 };
 
 const today = () => new Date().toISOString().split('T')[0];
@@ -1416,6 +1444,7 @@ const LABEL_TRANSLATIONS = {
   'hod-lod-breakout': 'HOD/LOD Breakout',
   // Improvement reasons
   'setup_correct': 'Setup was correct',
+  'invalid_trade': 'Ongeldige trade',
   'entry_too_early': 'Entry te vroeg',
   'entry_too_late': 'Entry te laat',
   'sl_too_tight': 'SL te strak',
@@ -1429,6 +1458,8 @@ const LABEL_TRANSLATIONS = {
   'AsiaL': 'Asia Low',
   'LondonH': 'London High',
   'LondonL': 'London Low',
+  'RangeTop': 'Range Top',
+  'RangeBottom': 'Range Bottom',
   'other_key': 'Ander key level',
   'none': 'Geen level',
   // Level precision
@@ -1496,6 +1527,35 @@ function getRMultiple(trade) {
 // Did this trade hit 2R during its lifetime? Uses the touched2R flag the user logged.
 function touched2R(trade) {
   return trade && trade.touched2R === true;
+}
+
+// Did this trade hit 1R during its lifetime?
+// If 2R was touched, 1R was definitely touched too.
+function touched1R(trade) {
+  return trade && (trade.touched1R === true || trade.touched2R === true);
+}
+
+// Did the user move SL to break-even on this trade?
+function slMovedToBE(trade) {
+  return trade && trade.slToBE === true;
+}
+
+// Classify a trade for the "SL naar BE — verschuiven of niet?" analysis.
+// Only meaningful for trades that touched 1R.
+// Returns: 'correct-shift' | 'wrong-shift' | 'correct-no-shift' | 'wrong-no-shift' | 'not-relevant' | 'irrelevant'
+function classifySLDecision(trade) {
+  if (!touched1R(trade)) return 'not-relevant';
+  const cls = classifyTrade(trade);
+  const shifted = slMovedToBE(trade);
+  if (shifted) {
+    if (cls === 'win') return 'correct-shift';
+    if (cls === 'breakeven') return 'wrong-shift';
+    return 'irrelevant';
+  } else {
+    if (cls === 'loss') return 'wrong-no-shift';
+    if (cls === 'win') return 'correct-no-shift';
+    return 'irrelevant';
+  }
 }
 
 function getBreakevenThreshold() {
@@ -2303,6 +2363,55 @@ function handleInstrumentChange() {
   }
 }
 
+// When session changes, repopulate the timeblock dropdown to match the session.
+// For 'ander', show extended blocks (incl. evening/night for XAU).
+function handleSessionChange() {
+  const sessionEl = document.getElementById('tradeSession');
+  const blockEl = document.getElementById('tradeTimeBlock');
+  if (!sessionEl || !blockEl) return;
+  const session = sessionEl.value;
+  const currentValue = blockEl.value;
+  
+  let blocks = [];
+  if (session === 'voormiddag') {
+    blocks = [
+      { v: '9-10', l: '9:00-10:00' },
+      { v: '10-11', l: '10:00-11:00' }
+    ];
+  } else if (session === 'namiddag') {
+    blocks = [
+      { v: '15:30-16:30', l: '15:30-16:30' },
+      { v: '16:30-17:30', l: '16:30-17:30' }
+    ];
+  } else {
+    // 'ander' — show all blocks incl. evening/night
+    blocks = [
+      { v: '8-9', l: '8:00-9:00' },
+      { v: '9-10', l: '9:00-10:00' },
+      { v: '10-11', l: '10:00-11:00' },
+      { v: '11-12', l: '11:00-12:00' },
+      { v: '12-13', l: '12:00-13:00' },
+      { v: '13-14', l: '13:00-14:00' },
+      { v: '14-15', l: '14:00-15:00' },
+      { v: '15-15:30', l: '15:00-15:30' },
+      { v: '15:30-16:30', l: '15:30-16:30' },
+      { v: '16:30-17:30', l: '16:30-17:30' },
+      { v: '17:30-19', l: '17:30-19:00' },
+      { v: '19-21', l: '19:00-21:00' },
+      { v: '21-23', l: '21:00-23:00' },
+      { v: 'nacht', l: 'Nacht (23:00-8:00)' }
+    ];
+  }
+  // Always add 'ander' as last option
+  blocks.push({ v: 'ander', l: 'Ander' });
+  
+  // Rebuild the dropdown
+  blockEl.innerHTML = blocks.map(b => `<option value="${b.v}">${b.l}</option>`).join('');
+  // Try to preserve the previous value if it still exists in the new list
+  const exists = blocks.some(b => b.v === currentValue);
+  if (exists) blockEl.value = currentValue;
+}
+
 function getInstrumentValue() {
   const select = document.getElementById('tradeInstrument');
   if (select.value === '__custom__') {
@@ -2384,6 +2493,8 @@ async function saveTrade() {
     planFollowed: document.getElementById('tradePlanFollowed').value,
     improvement: document.getElementById('tradeImprovement').value,
     touched2R: document.getElementById('evalTouched2R').checked,
+    touched1R: document.getElementById('evalTouched1R').checked,
+    slToBE: document.getElementById('evalSLToBE').checked,
     evaluation: {
       dailyTrend: document.getElementById('evalDailyTrend').value,
       level: document.getElementById('evalLevel').value,
@@ -2475,6 +2586,8 @@ function editTrade(tradeId) {
   
   setVal('tradeDirection', trade.direction);
   setVal('tradeSession', trade.session);
+  // Re-sync timeblock options before setting the value (so the trade's value can exist)
+  if (typeof handleSessionChange === 'function') handleSessionChange();
   setVal('tradeTimeBlock', trade.timeBlock);
   setVal('tradeExactTime', trade.exactTime);
   setVal('tradeExitTime', trade.exitTime);
@@ -2502,6 +2615,8 @@ function editTrade(tradeId) {
   setVal('evalVwap', ev.vwap);
   setVal('evalExit', ev.exit);
   document.getElementById('evalTouched2R').checked = trade.touched2R === true;
+  document.getElementById('evalTouched1R').checked = trade.touched1R === true;
+  document.getElementById('evalSLToBE').checked = trade.slToBE === true;
   setVal('evalAtr', ev.atr);
   setVal('evalMentorFollowed', ev.mentorFollowed);
   setVal('evalMentorName', ev.mentorName);
@@ -2613,25 +2728,46 @@ function clearTradeForm() {
     durDisplay.textContent = '— min';
     durDisplay.style.color = '#94a3b8';
   }
-  // Reset all evaluation dropdowns
-  ['tradeImprovement', 'evalDailyTrend', 'evalLevel', 'evalLevelPrecision', 'evalIndices', 'evalTimeframe', 'evalHammer', 'evalStoppedOut', 'evalManualClose', 'evalVwap', 'evalExit', 'evalAtr', 'evalMentorFollowed'].forEach(id => {
+  // Reset evaluation dropdowns to their DEFAULT values (not blank)
+  const defaults = {
+    'tradeImprovement': 'setup_correct',
+    'evalDailyTrend': 'nee',
+    'evalLevel': 'RangeBottom',
+    'evalLevelPrecision': 'exact',
+    'evalIndices': 'not_checked',
+    'evalTimeframe': '1min',
+    'evalHammer': 'nee',
+    'evalStoppedOut': 'not_applicable',
+    'evalManualClose': 'manual_na',
+    'evalVwap': 'neutral',
+    'evalExit': 'stopped_out',
+    'evalAtr': 'nee',
+    'evalMentorFollowed': 'nee'
+  };
+  for (const [id, val] of Object.entries(defaults)) {
     const el = document.getElementById(id);
-    if (el) el.value = '';
-  });
-  // Reset touched2R checkbox
-  const touched2R = document.getElementById('evalTouched2R');
-  if (touched2R) touched2R.checked = false;
+    if (el) el.value = val;
+  }
+  // Reset all R-related checkboxes
+  const touched2REl = document.getElementById('evalTouched2R');
+  if (touched2REl) touched2REl.checked = false;
+  const touched1REl = document.getElementById('evalTouched1R');
+  if (touched1REl) touched1REl.checked = false;
+  const slToBEEl = document.getElementById('evalSLToBE');
+  if (slToBEEl) slToBEEl.checked = false;
   // Hide custom instrument input and mentor field
   const customInput = document.getElementById('tradeInstrumentCustom');
   if (customInput) customInput.style.display = 'none';
   const mentorGroup = document.getElementById('mentorNameGroup');
   if (mentorGroup) mentorGroup.style.display = 'none';
-  // Reset instrument select to first option
+  // Reset instrument select to XAU
   const instrSelect = document.getElementById('tradeInstrument');
-  if (instrSelect) instrSelect.value = 'DAX';
+  if (instrSelect) instrSelect.value = 'XAU';
   // Reset strategy checklist checkboxes
   document.querySelectorAll('input[id^="strat-"]').forEach(cb => cb.checked = false);
   updateStrategyScore();
+  // Re-sync timeblock dropdown to default session
+  if (typeof handleSessionChange === 'function') handleSessionChange();
   // Clear screenshot
   removeScreenshot();
 }
@@ -2648,10 +2784,25 @@ function updateTradeWarning() {
     warnings.push('<div class="warning-box">⚠️ Pre-Market score zegt: traden met HALVE risk unit. Verklein je positiegrootte met 50%.</div>');
   }
   
-  // Daily trade limit
+  // Daily R limits (replaces trade-count limit)
   const todayTrades = state.trades.filter(t => t.date === today());
-  if (todayTrades.length >= state.settings.maxTrades) {
-    warnings.push(`<div class="warning-box">⚠️ Daglimiet bereikt: ${todayTrades.length}/${state.settings.maxTrades} trades. STOP.</div>`);
+  let todayTotalR = 0;
+  let todayHasUsableR = false;
+  todayTrades.forEach(t => {
+    const r = getRMultiple(t);
+    if (r !== null) { todayTotalR += r; todayHasUsableR = true; }
+  });
+  const maxLossR = state.settings.maxLossR !== undefined ? state.settings.maxLossR : 3;
+  const maxProfitR = state.settings.maxProfitR !== undefined ? state.settings.maxProfitR : 6;
+  
+  if (todayHasUsableR && todayTotalR <= -maxLossR) {
+    warnings.push(`<div class="warning-box">🛑 Daglimiet bereikt: ${todayTotalR.toFixed(2)}R behaald (limiet -${maxLossR}R). <strong>STOP met traden vandaag.</strong> De markt zegt nee — accepteer dat en kom morgen terug.</div>`);
+  } else if (todayHasUsableR && todayTotalR >= maxProfitR) {
+    warnings.push(`<div class="warning-box">🎯 Profit-limiet bereikt: +${todayTotalR.toFixed(2)}R behaald (limiet +${maxProfitR}R). <strong>STOP met traden vandaag.</strong> Je hebt genoeg — geef het niet terug aan de markt.</div>`);
+  } else if (todayHasUsableR && todayTotalR <= -maxLossR + 1) {
+    warnings.push(`<div class="warning-box">⚠️ Bijna aan loss-limiet: ${todayTotalR.toFixed(2)}R (limiet -${maxLossR}R). Nog één verliestrade en je sluit af.</div>`);
+  } else if (todayHasUsableR && todayTotalR >= maxProfitR - 1) {
+    warnings.push(`<div class="warning-box">⚠️ Bijna aan profit-limiet: +${todayTotalR.toFixed(2)}R (limiet +${maxProfitR}R). Eén goede trade meer en je sluit af.</div>`);
   }
   
   el.innerHTML = warnings.join('');
@@ -2678,9 +2829,28 @@ function renderTodayTrades() {
   const decisive = wins + losses;
   const winRate = decisive > 0 ? Math.round(wins/decisive*100) : 0;
   
+  // Calculate today's total R for stat box
+  let todayTotalR = 0;
+  let todayHasUsableR = false;
+  todayTrades.forEach(t => {
+    const r = getRMultiple(t);
+    if (r !== null) { todayTotalR += r; todayHasUsableR = true; }
+  });
+  const maxLossR = state.settings.maxLossR !== undefined ? state.settings.maxLossR : 3;
+  const maxProfitR = state.settings.maxProfitR !== undefined ? state.settings.maxProfitR : 6;
+  // Color the R box based on proximity to limits
+  let rColor = '';
+  if (todayHasUsableR) {
+    if (todayTotalR <= -maxLossR || todayTotalR >= maxProfitR) rColor = todayTotalR >= 0 ? 'pnl-positive' : 'pnl-negative';
+    else if (todayTotalR > 0) rColor = 'pnl-positive';
+    else if (todayTotalR < 0) rColor = 'pnl-negative';
+  }
+  const rDisplay = todayHasUsableR ? `${todayTotalR>=0?'+':''}${todayTotalR.toFixed(2)}R` : '— R';
+  
   let html = `<div class="stats-row">
-    <div class="stat-box"><div class="stat-label">Aantal</div><div class="stat-value">${todayTrades.length}/${state.settings.maxTrades}</div></div>
-    <div class="stat-box"><div class="stat-label">P&L</div><div class="stat-value ${totalPnL>=0?'pnl-positive':'pnl-negative'}">€${totalPnL.toFixed(2)}</div></div>
+    <div class="stat-box"><div class="stat-label">Vandaag (R)</div><div class="stat-value ${rColor}">${rDisplay}</div><div style="font-size:11px; color:#64748b; margin-top:4px;">Limiet: -${maxLossR}R / +${maxProfitR}R</div></div>
+    <div class="stat-box"><div class="stat-label">Trades</div><div class="stat-value">${todayTrades.length}</div></div>
+    <div class="stat-box"><div class="stat-label">€ P&L</div><div class="stat-value ${totalPnL>=0?'pnl-positive':'pnl-negative'}">€${totalPnL.toFixed(2)}</div></div>
     <div class="stat-box"><div class="stat-label">W / L / BE</div><div class="stat-value" style="font-size:18px;"><span class="pnl-positive">${wins}</span> / <span class="pnl-negative">${losses}</span> / <span style="color:#94a3b8;">${breakevens}</span></div></div>
     <div class="stat-box"><div class="stat-label">Win rate (excl BE)</div><div class="stat-value">${winRate}%</div></div>
   </div>`;
@@ -2777,7 +2947,7 @@ function renderHistory() {
   if (state.trades.length === 0) {
     allEl.innerHTML = '<div class="empty-state">Nog geen trades.</div>';
   } else {
-    let html = '<table><thead><tr><th>Datum</th><th>Entry</th><th>Exit</th><th>Duur</th><th>Instrument</th><th>Richting</th><th>Setup</th><th>P&L</th><th>R</th><th>2R advies</th><th>Plan?</th><th>Score</th><th>Acties</th></tr></thead><tbody>';
+    let html = '<table><thead><tr><th>Datum</th><th>Entry</th><th>Exit</th><th>Duur</th><th>Instrument</th><th>Richting</th><th>Setup</th><th>P&L</th><th>R</th><th>2R advies</th><th>BE-shift advies</th><th>Plan?</th><th>Score</th><th>Acties</th></tr></thead><tbody>';
     state.trades.forEach(t => {
       const d = new Date(t.timestamp);
       const entryTime = t.exactTime || d.toLocaleTimeString('nl-BE', {hour:'2-digit', minute:'2-digit'});
@@ -2790,7 +2960,7 @@ function renderHistory() {
       const rCell = r !== null 
         ? `<span class="${r>0?'pnl-positive':r<0?'pnl-negative':''}">${r>=0?'+':''}${r.toFixed(2)}R</span>`
         : '<span style="color:#64748b;">—</span>';
-      // 2R advice column: only meaningful if trade touched 2R and was NOT secured at 2R
+      // 2R advice column
       let adviceCell = '<span style="color:#475569;">—</span>';
       if (touched2R(t)) {
         const exitStrat = t.evaluation && t.evaluation.exit;
@@ -2801,6 +2971,18 @@ function renderHistory() {
           else if (r < 1.9) adviceCell = '<span style="color:#ef4444; font-size:11px;">✗ Had beter 2R gepakt</span>';
           else adviceCell = '<span style="color:#f59e0b; font-size:11px;">≈ Gelijk uit</span>';
         }
+      }
+      // BE-shift advice column
+      let beShiftCell = '<span style="color:#475569;">—</span>';
+      const slDecision = classifySLDecision(t);
+      if (slDecision === 'correct-shift') {
+        beShiftCell = '<span style="color:#10b981; font-size:11px;">✓ Goed verschoven</span>';
+      } else if (slDecision === 'wrong-shift') {
+        beShiftCell = '<span style="color:#ef4444; font-size:11px;">✗ Had niet moeten schuiven</span>';
+      } else if (slDecision === 'correct-no-shift') {
+        beShiftCell = '<span style="color:#10b981; font-size:11px;">✓ Terecht niet geschoven</span>';
+      } else if (slDecision === 'wrong-no-shift') {
+        beShiftCell = '<span style="color:#ef4444; font-size:11px;">✗ Had moeten schuiven</span>';
       }
       // Count screenshots
       const screenshotCount = Array.isArray(t.screenshots) && t.screenshots.length > 0
@@ -2822,6 +3004,7 @@ function renderHistory() {
         <td class="${t.pnl>=0?'pnl-positive':'pnl-negative'}">€${t.pnl.toFixed(2)}</td>
         <td>${rCell}</td>
         <td>${adviceCell}</td>
+        <td>${beShiftCell}</td>
         <td>${t.planFollowed}</td>
         <td>${t.checklistScore || '-'}</td>
         <td>${actionBtns}</td>
@@ -3040,6 +3223,98 @@ function render2RAnalysis(trades) {
   </div>`;
 }
 
+// ====== SL NAAR BE: VERSCHUIVEN OF NIET? Analyse ======
+function renderSLToBEAnalysis(trades) {
+  const reached1R = trades.filter(t => touched1R(t));
+  
+  if (reached1R.length < 3) {
+    return `<div class="card" style="background:#0f172a; margin-top:20px;">
+      <h3 style="margin-top:0;">🛡️ SL naar BE: verschuiven of laten?</h3>
+      <div style="color:#94a3b8; font-size:14px;">
+        Nog niet genoeg data. Vink "1R aangeraakt" en "SL verschoven naar BE" aan bij minstens 3 trades die het 1R-niveau hebben bereikt.
+      </div>
+      <div style="color:#64748b; font-size:13px; margin-top:8px;">
+        Status: ${reached1R.length} trade(s) met 1R aangeraakt.
+      </div>
+    </div>`;
+  }
+  
+  const shifted = reached1R.filter(t => slMovedToBE(t));
+  const notShifted = reached1R.filter(t => !slMovedToBE(t));
+  
+  const shiftedWins = shifted.filter(t => classifyTrade(t) === 'win').length;
+  const shiftedBE = shifted.filter(t => classifyTrade(t) === 'breakeven').length;
+  const shiftedLoss = shifted.filter(t => classifyTrade(t) === 'loss').length;
+  
+  const notShiftedWins = notShifted.filter(t => classifyTrade(t) === 'win').length;
+  const notShiftedBE = notShifted.filter(t => classifyTrade(t) === 'breakeven').length;
+  const notShiftedLoss = notShifted.filter(t => classifyTrade(t) === 'loss').length;
+  
+  const wrongShifts = shiftedBE; // shifted to BE, ended at BE → possibly gave up a winner
+  const wrongNoShifts = notShiftedLoss; // didn't shift, got stopped out → would have been BE
+  
+  const totalShiftDecisions = shifted.length;
+  const totalNoShiftDecisions = notShifted.length;
+  
+  let verdict = '';
+  let verdictColor = '#94a3b8';
+  
+  const shiftMistakeRate = totalShiftDecisions > 0 ? wrongShifts / totalShiftDecisions : 0;
+  const noShiftMistakeRate = totalNoShiftDecisions > 0 ? wrongNoShifts / totalNoShiftDecisions : 0;
+  
+  if (totalShiftDecisions >= 3 && totalNoShiftDecisions >= 3) {
+    if (shiftMistakeRate > 0.4 && shiftMistakeRate > noShiftMistakeRate + 0.2) {
+      verdict = `❌ <strong>Je verschuift te vaak naar BE.</strong> ${wrongShifts} van je ${totalShiftDecisions} verschuif-beslissingen werden BE-stops (mogelijk winst weggegeven). Overweeg om SL vaker op de initiële plaats te laten.`;
+      verdictColor = '#ef4444';
+    } else if (noShiftMistakeRate > 0.4 && noShiftMistakeRate > shiftMistakeRate + 0.2) {
+      verdict = `❌ <strong>Je verschuift te weinig naar BE.</strong> ${wrongNoShifts} van je ${totalNoShiftDecisions} niet-verschuif-beslissingen werden volledige losses (zou BE geweest zijn). Je laat verlies zwaarder wegen dan nodig.`;
+      verdictColor = '#ef4444';
+    } else if (Math.abs(shiftMistakeRate - noShiftMistakeRate) < 0.15) {
+      verdict = `⚖️ <strong>Je BE-verschuif keuzes zijn redelijk gebalanceerd.</strong> Verschuiven gaf ${(shiftMistakeRate*100).toFixed(0)}% gemiste winsten, niet-verschuiven ${(noShiftMistakeRate*100).toFixed(0)}% vermijdbare losses.`;
+      verdictColor = '#f59e0b';
+    } else {
+      verdict = `✓ <strong>Geen duidelijk patroon.</strong> Verschuiven gaf ${(shiftMistakeRate*100).toFixed(0)}% BE-stops, niet-verschuiven gaf ${(noShiftMistakeRate*100).toFixed(0)}% volledige losses.`;
+      verdictColor = '#94a3b8';
+    }
+  } else {
+    verdict = `ℹ️ Te weinig data voor harde conclusie. Nodig: minstens 3 trades waarbij je SL naar BE schoof, én minstens 3 waarbij je het niet deed.`;
+  }
+  
+  return `<div class="card" style="background:linear-gradient(135deg, #0f172a, #1e293b); border:1px solid #334155; margin-top:20px;">
+    <h3 style="margin-top:0; display:flex; align-items:center; gap:8px;">🛡️ SL naar BE: verschuiven of laten?</h3>
+    <div style="color:#94a3b8; font-size:13px; margin-bottom:16px;">
+      Analyse over ${reached1R.length} trades die het 1R-niveau hebben aangeraakt.
+    </div>
+    
+    <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(300px, 1fr)); gap:14px; margin-bottom:16px;">
+      <div style="background:#0f172a; padding:14px; border-radius:8px; border-left:3px solid #60a5fa;">
+        <div style="font-size:13px; color:#cbd5e1; font-weight:600; margin-bottom:8px;">Je verschoof naar BE</div>
+        <div style="font-size:22px; font-weight:700; color:#60a5fa;">${totalShiftDecisions} trade(s)</div>
+        <div style="font-size:12px; color:#94a3b8; margin-top:8px; line-height:1.6;">
+          <span class="pnl-positive">✓ ${shiftedWins} hit TP</span> (verschuif maakte niet uit)<br>
+          <span style="color:#94a3b8;">○ ${shiftedBE} ging naar BE</span> ← <strong style="color:#fbbf24;">mogelijk gemiste winst</strong><br>
+          ${shiftedLoss > 0 ? `<span class="pnl-negative">✗ ${shiftedLoss} loss</span> (zeldzaam, slippage?)<br>` : ''}
+        </div>
+      </div>
+      <div style="background:#0f172a; padding:14px; border-radius:8px; border-left:3px solid #fbbf24;">
+        <div style="font-size:13px; color:#cbd5e1; font-weight:600; margin-bottom:8px;">Je verschoof NIET</div>
+        <div style="font-size:22px; font-weight:700; color:#fbbf24;">${totalNoShiftDecisions} trade(s)</div>
+        <div style="font-size:12px; color:#94a3b8; margin-top:8px; line-height:1.6;">
+          <span class="pnl-positive">✓ ${notShiftedWins} hit TP</span> (terecht niet verschoven)<br>
+          <span class="pnl-negative">✗ ${notShiftedLoss} volledige loss</span> ← <strong style="color:#ef4444;">had BE geweest met shift</strong><br>
+          ${notShiftedBE > 0 ? `<span style="color:#94a3b8;">○ ${notShiftedBE} BE</span><br>` : ''}
+        </div>
+      </div>
+    </div>
+    
+    <div style="background:rgba(${verdictColor === '#10b981' ? '16,185,129' : verdictColor === '#ef4444' ? '239,68,68' : '245,158,11'},0.1); border-left:3px solid ${verdictColor}; padding:12px 14px; border-radius:6px; color:#e2e8f0; font-size:14px; line-height:1.5;">${verdict}</div>
+    
+    <div style="font-size:11px; color:#64748b; margin-top:12px; font-style:italic;">
+      Mogelijk gemiste winst = je verschoof, kreeg BE, terwijl trade misschien daarna naar TP ging. Vermijdbaar verlies = je verschoof niet, raakte initiële SL, terwijl shift naar BE de positie had gered.
+    </div>
+  </div>`;
+}
+
 function renderInsights() {
   const el = document.getElementById('insightsContent');
   
@@ -3159,6 +3434,9 @@ function renderInsights() {
   // ====== 2R PAKKEN OF LATEN LOPEN? ======
   html += render2RAnalysis(filtered);
   
+  // ====== SL NAAR BE: VERSCHUIVEN OF LATEN? ======
+  html += renderSLToBEAnalysis(filtered);
+  
   // Breakdown by instrument (only show when "all")
   if (insightsFilterInstrument === 'all') {
     html += '<h3 style="margin-top:24px;">Per Instrument</h3>';
@@ -3256,18 +3534,25 @@ function renderDurationBreakdown(trades) {
   
   let html = '<div style="margin-bottom:16px;"><div style="font-weight:600; color:#cbd5e1; margin-bottom:8px; font-size:14px;">Duur in trade</div>';
   html += '<div class="card" style="background:#0f172a; padding:12px;">';
+  const beThreshold = getBreakevenThreshold();
   filledBuckets.forEach(([key, data]) => {
     const decisive = data.wins + data.losses;
     const winRate = decisive > 0 ? (data.wins / decisive * 100).toFixed(0) : '-';
     const beNote = data.breakevens > 0 ? `, ${data.breakevens}BE` : '';
     const width = maxPnL > 0 ? Math.abs(data.pnl) / maxPnL * 100 : 0;
     const avgPnL = (data.pnl / data.trades.length).toFixed(2);
+    const isGroupBE = Math.abs(data.pnl) <= beThreshold;
+    const valueClass = isGroupBE ? '' : (data.pnl >= 0 ? 'pnl-positive' : 'pnl-negative');
+    const valueStyle = isGroupBE ? 'color:#94a3b8;' : '';
+    const barBg = isGroupBE 
+      ? 'linear-gradient(90deg,#64748b,#94a3b8)' 
+      : (data.pnl >= 0 ? 'linear-gradient(90deg,#10b981,#34d399)' : 'linear-gradient(90deg,#ef4444,#f87171)');
     html += `<div style="margin-bottom:10px;">
       <div class="breakdown-row">
         <span style="font-size:13px;"><strong>${translateLabel(key)}</strong> (${data.trades.length}x, ${winRate}% WR${beNote}, avg €${avgPnL})</span>
-        <span class="${data.pnl>=0?'pnl-positive':'pnl-negative'}">€${data.pnl.toFixed(2)}</span>
+        <span class="${valueClass}" style="${valueStyle}">€${data.pnl.toFixed(2)}</span>
       </div>
-      <div class="breakdown-bar"><div class="breakdown-fill" style="width:${width}%; background:${data.pnl>=0?'linear-gradient(90deg,#10b981,#34d399)':'linear-gradient(90deg,#ef4444,#f87171)'};"></div></div>
+      <div class="breakdown-bar"><div class="breakdown-fill" style="width:${width}%; background:${barBg};"></div></div>
     </div>`;
   });
   html += '</div></div>';
@@ -3297,18 +3582,25 @@ function renderEvaluationBreakdown(field, label, trades) {
   
   let html = `<div style="margin-bottom:16px;"><div style="font-weight:600; color:#cbd5e1; margin-bottom:8px; font-size:14px;">${label}</div>`;
   html += '<div class="card" style="background:#0f172a; padding:12px;">';
+  const beThreshold = getBreakevenThreshold();
   sorted.forEach(([key, data]) => {
     const decisive = data.wins + data.losses;
     const winRate = decisive > 0 ? (data.wins / decisive * 100).toFixed(0) : '-';
     const beNote = data.breakevens > 0 ? `, ${data.breakevens}BE` : '';
     const width = maxPnL > 0 ? Math.abs(data.pnl) / maxPnL * 100 : 0;
     const avgPnL = (data.pnl / data.trades.length).toFixed(2);
+    const isGroupBE = Math.abs(data.pnl) <= beThreshold;
+    const valueClass = isGroupBE ? '' : (data.pnl >= 0 ? 'pnl-positive' : 'pnl-negative');
+    const valueStyle = isGroupBE ? 'color:#94a3b8;' : '';
+    const barBg = isGroupBE 
+      ? 'linear-gradient(90deg,#64748b,#94a3b8)' 
+      : (data.pnl >= 0 ? 'linear-gradient(90deg,#10b981,#34d399)' : 'linear-gradient(90deg,#ef4444,#f87171)');
     html += `<div style="margin-bottom:10px;">
       <div class="breakdown-row">
         <span style="font-size:13px;"><strong>${translateLabel(key)}</strong> (${data.trades.length}x, ${winRate}% WR${beNote}, avg €${avgPnL})</span>
-        <span class="${data.pnl>=0?'pnl-positive':'pnl-negative'}">€${data.pnl.toFixed(2)}</span>
+        <span class="${valueClass}" style="${valueStyle}">€${data.pnl.toFixed(2)}</span>
       </div>
-      <div class="breakdown-bar"><div class="breakdown-fill" style="width:${width}%; background:${data.pnl>=0?'linear-gradient(90deg,#10b981,#34d399)':'linear-gradient(90deg,#ef4444,#f87171)'};"></div></div>
+      <div class="breakdown-bar"><div class="breakdown-fill" style="width:${width}%; background:${barBg};"></div></div>
     </div>`;
   });
   html += '</div></div>';
@@ -3333,17 +3625,25 @@ function renderBreakdown(field, trades) {
   const maxPnL = Math.max(...sorted.map(([,d]) => Math.abs(d.pnl)));
   
   let html = '<div class="card" style="background:#0f172a;">';
+  const beThreshold = getBreakevenThreshold();
   sorted.forEach(([key, data]) => {
     const decisive = data.wins + data.losses;
     const winRate = decisive > 0 ? (data.wins / decisive * 100).toFixed(0) : '-';
     const beNote = data.breakevens > 0 ? `, ${data.breakevens}BE` : '';
     const width = maxPnL > 0 ? Math.abs(data.pnl) / maxPnL * 100 : 0;
+    // BE classification at group level: if total falls within ±BE threshold
+    const isGroupBE = Math.abs(data.pnl) <= beThreshold;
+    const valueClass = isGroupBE ? '' : (data.pnl >= 0 ? 'pnl-positive' : 'pnl-negative');
+    const valueStyle = isGroupBE ? 'color:#94a3b8;' : '';
+    const barBg = isGroupBE 
+      ? 'linear-gradient(90deg,#64748b,#94a3b8)' 
+      : (data.pnl >= 0 ? 'linear-gradient(90deg,#10b981,#34d399)' : 'linear-gradient(90deg,#ef4444,#f87171)');
     html += `<div style="margin-bottom:12px;">
       <div class="breakdown-row">
         <span><strong>${translateLabel(key)}</strong> (${data.trades.length} trades, ${winRate}% WR${beNote})</span>
-        <span class="${data.pnl>=0?'pnl-positive':'pnl-negative'}">€${data.pnl.toFixed(2)}</span>
+        <span class="${valueClass}" style="${valueStyle}">€${data.pnl.toFixed(2)}</span>
       </div>
-      <div class="breakdown-bar"><div class="breakdown-fill" style="width:${width}%; background:${data.pnl>=0?'linear-gradient(90deg,#10b981,#34d399)':'linear-gradient(90deg,#ef4444,#f87171)'};"></div></div>
+      <div class="breakdown-bar"><div class="breakdown-fill" style="width:${width}%; background:${barBg};"></div></div>
     </div>`;
   });
   html += '</div>';
@@ -3587,7 +3887,8 @@ function renderPatterns(trades) {
 
 // ==================== SETTINGS ====================
 async function saveSettings() {
-  state.settings.maxTrades = parseInt(document.getElementById('settingMaxTrades').value);
+  state.settings.maxLossR = parseFloat(document.getElementById('settingMaxLossR').value) || 3;
+  state.settings.maxProfitR = parseFloat(document.getElementById('settingMaxProfitR').value) || 6;
   state.settings.dailyLoss = parseFloat(document.getElementById('settingDailyLoss').value);
   state.settings.riskPerTrade = parseFloat(document.getElementById('settingRiskPerTrade').value);
   state.settings.breakevenThreshold = parseFloat(document.getElementById('settingBreakevenThreshold').value) || 0;
@@ -3595,16 +3896,17 @@ async function saveSettings() {
   try {
     await cloudStorage.upsert('settings', { user_id: currentUser.id, data: state.settings }, 'user_id');
     showToast('Instellingen opgeslagen');
-    // Re-render insights and today's trades since classification changed
     renderInsights();
     renderTodayTrades();
+    updateTradeWarning();
   } catch (err) {
     showToast('Fout: ' + err.message, true);
   }
 }
 
 function loadSettings() {
-  document.getElementById('settingMaxTrades').value = state.settings.maxTrades;
+  document.getElementById('settingMaxLossR').value = state.settings.maxLossR !== undefined ? state.settings.maxLossR : 3;
+  document.getElementById('settingMaxProfitR').value = state.settings.maxProfitR !== undefined ? state.settings.maxProfitR : 6;
   document.getElementById('settingDailyLoss').value = state.settings.dailyLoss;
   document.getElementById('settingRiskPerTrade').value = state.settings.riskPerTrade;
   document.getElementById('settingBreakevenThreshold').value = state.settings.breakevenThreshold !== undefined ? state.settings.breakevenThreshold : 5;
@@ -3722,6 +4024,8 @@ async function init() {
   showDate();
   setupNavigation();
   setupPasteHandler();
+  // Populate timeblock dropdown based on initial session selection
+  if (typeof handleSessionChange === 'function') handleSessionChange();
   
   // Wait for Supabase library to be available (max 5 seconds)
   let waited = 0;
