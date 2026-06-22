@@ -153,6 +153,40 @@
     display: flex;
     flex-direction: column;
   }
+  /* Stop-shift checkbox pills - visually distinct and clear feedback */
+  .shift-check {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    cursor: pointer;
+    padding: 10px 14px;
+    background: #1e293b;
+    border: 2px solid #334155;
+    border-radius: 8px;
+    min-height: 42px;
+    transition: all 0.15s ease;
+    font-size: 13px;
+    color: #cbd5e1;
+    user-select: none;
+  }
+  .shift-check:hover {
+    border-color: #60a5fa;
+    background: #1e293b;
+  }
+  .shift-check.checked {
+    background: linear-gradient(135deg, #1e3a8a, #1e40af);
+    border-color: #60a5fa;
+    color: #ffffff;
+    font-weight: 600;
+  }
+  .shift-check input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    cursor: pointer;
+    margin: 0;
+    accent-color: #60a5fa;
+    flex-shrink: 0;
+  }
   .form-group label {
     font-size: 12px;
     color: #94a3b8;
@@ -744,7 +778,7 @@
         </div>
         <div class="form-group">
           <label>Exit strategie</label>
-          <select id="evalExit">
+          <select id="evalExit" onchange="updateShiftFieldVisibility()">
             <option value="">-- Selecteer --</option>
             <option value="2R_secured">2R gepakt</option>
             <option value="trailed_sl">SL mee verschoven (+2R)</option>
@@ -752,27 +786,76 @@
             <option value="stopped_out" selected>Stoploss geraakt</option>
           </select>
         </div>
-        <div class="form-group">
-          <label>1R aangeraakt?</label>
-          <label style="display:flex; align-items:center; gap:8px; cursor:pointer; padding:8px 12px; background:#0f172a; border:1px solid #334155; border-radius:6px; min-height:38px;">
-            <input type="checkbox" id="evalTouched1R" style="width:16px; height:16px; cursor:pointer; margin:0;">
-            <span style="font-size:13px;">Ja, prijs raakte 1R</span>
-          </label>
+      </div>
+      
+      <!-- Stop-shift decisions: visually emphasized block -->
+      <div style="background:#0f172a; border:1px solid #334155; border-radius:8px; padding:14px; margin-bottom:14px;">
+        <div style="font-weight:600; font-size:13px; color:#cbd5e1; margin-bottom:10px;">🛡️ Stop-shift beslissingen</div>
+        <div class="form-grid">
+          <div class="form-group">
+            <label style="font-size:12px;">1R aangeraakt?</label>
+            <label class="shift-check" data-target="evalTouched1R">
+              <input type="checkbox" id="evalTouched1R" onchange="updateShiftFieldVisibility(); updateShiftCheckStyles()">
+              <span>Ja, prijs raakte 1R</span>
+            </label>
+          </div>
+          <div class="form-group">
+            <label style="font-size:12px;">2R aangeraakt?</label>
+            <label class="shift-check" data-target="evalTouched2R">
+              <input type="checkbox" id="evalTouched2R" onchange="updateShiftFieldVisibility(); updateShiftCheckStyles()">
+              <span>Ja, prijs raakte 2R</span>
+            </label>
+          </div>
+          <div class="form-group">
+            <label style="font-size:12px;">SL → BE verschoven (bij 1R)?</label>
+            <label class="shift-check" data-target="evalSLToBE">
+              <input type="checkbox" id="evalSLToBE" onchange="updateShiftFieldVisibility(); updateShiftCheckStyles()">
+              <span>Ja, SL → BE</span>
+            </label>
+          </div>
+          <div class="form-group">
+            <label style="font-size:12px;">SL → 1R verschoven (bij 2R)?</label>
+            <label class="shift-check" data-target="evalSLToOneR">
+              <input type="checkbox" id="evalSLToOneR" onchange="updateShiftFieldVisibility(); updateShiftCheckStyles()">
+              <span>Ja, SL → 1R</span>
+            </label>
+          </div>
         </div>
-        <div class="form-group">
-          <label>2R aangeraakt?</label>
-          <label style="display:flex; align-items:center; gap:8px; cursor:pointer; padding:8px 12px; background:#0f172a; border:1px solid #334155; border-radius:6px; min-height:38px;">
-            <input type="checkbox" id="evalTouched2R" style="width:16px; height:16px; cursor:pointer; margin:0;">
-            <span style="font-size:13px;">Ja, prijs raakte 2R</span>
-          </label>
+        
+        <!-- Conditional outcome dropdowns -->
+        <div id="shiftOutcomesContainer" style="margin-top:12px;">
+          <div class="form-group" id="outcomeAfter1RGroup" style="display:none; margin-bottom:10px;">
+            <label style="font-size:12px;">Wat gebeurde er na 1R (na je SL→BE shift)?</label>
+            <select id="evalAfter1R">
+              <option value="">-- Selecteer --</option>
+              <option value="went_through">Ging direct verder, kwam niet terug (shift was irrelevant)</option>
+              <option value="returned_saved">Kwam terug tot initiële SL → shift redde je (✓ GOEDE keuze)</option>
+              <option value="returned_lost_winner">Kwam terug, tikte BE-stop, daarna alsnog naar 2R+ (✗ SLECHTE keuze)</option>
+              <option value="returned_failed">Kwam terug, tikte BE-stop, daarna niet meer (shift irrelevant)</option>
+            </select>
+          </div>
+          <div class="form-group" id="outcomeAfter2RGroup" style="display:none; margin-bottom:10px;">
+            <label style="font-size:12px;">Wat gebeurde er na 2R (na je SL→1R shift)?</label>
+            <select id="evalAfter2R">
+              <option value="">-- Selecteer --</option>
+              <option value="went_through">Ging direct verder naar 3R+ (shift was irrelevant)</option>
+              <option value="returned_saved">Kwam terug tot BE → shift redde je een +1R winst (✓ GOEDE keuze)</option>
+              <option value="returned_lost_winner">Kwam terug, tikte 1R-stop, daarna alsnog naar 2R+ (✗ SLECHTE keuze)</option>
+              <option value="returned_failed">Kwam terug, tikte 1R-stop, daarna niet meer (shift irrelevant)</option>
+            </select>
+          </div>
+          <div class="form-group" id="outcomeAfter2RTargetGroup" style="display:none; margin-bottom:10px;">
+            <label style="font-size:12px;">Trade was vastgeklikt op 2R. Wat gebeurde daarna?</label>
+            <select id="evalAfter2RTarget">
+              <option value="">-- Selecteer --</option>
+              <option value="2r_was_top">2R was de top, geen verdere beweging (✓ GOEDE keuze)</option>
+              <option value="went_higher">Ging door tot minimaal 3R (✗ had moeten laten lopen)</option>
+            </select>
+          </div>
         </div>
-        <div class="form-group">
-          <label>SL verschoven naar BE?</label>
-          <label style="display:flex; align-items:center; gap:8px; cursor:pointer; padding:8px 12px; background:#0f172a; border:1px solid #334155; border-radius:6px; min-height:38px;">
-            <input type="checkbox" id="evalSLToBE" style="width:16px; height:16px; cursor:pointer; margin:0;">
-            <span style="font-size:13px;">Ja, naar BE na 1R</span>
-          </label>
-        </div>
+      </div>
+      
+      <div class="form-grid">
         <div class="form-group">
           <label>ATR invloed?</label>
           <select id="evalAtr">
@@ -1535,27 +1618,52 @@ function touched1R(trade) {
   return trade && (trade.touched1R === true || trade.touched2R === true);
 }
 
-// Did the user move SL to break-even on this trade?
+// Did the user move SL to break-even on this trade (after 1R)?
 function slMovedToBE(trade) {
   return trade && trade.slToBE === true;
 }
 
-// Classify a trade for the "SL naar BE — verschuiven of niet?" analysis.
-// Only meaningful for trades that touched 1R.
-// Returns: 'correct-shift' | 'wrong-shift' | 'correct-no-shift' | 'wrong-no-shift' | 'not-relevant' | 'irrelevant'
-function classifySLDecision(trade) {
-  if (!touched1R(trade)) return 'not-relevant';
-  const cls = classifyTrade(trade);
-  const shifted = slMovedToBE(trade);
-  if (shifted) {
-    if (cls === 'win') return 'correct-shift';
-    if (cls === 'breakeven') return 'wrong-shift';
-    return 'irrelevant';
-  } else {
-    if (cls === 'loss') return 'wrong-no-shift';
-    if (cls === 'win') return 'correct-no-shift';
-    return 'irrelevant';
-  }
+// Did the user move SL to 1R on this trade (after 2R)?
+function slMovedToOneR(trade) {
+  return trade && trade.slToOneR === true;
+}
+
+// ===== Three explicit classifiers based on user-logged outcome data =====
+
+// SL → BE decision (after touching 1R).
+// Returns: 'good' | 'bad' | 'irrelevant' | 'not-logged' | 'na'
+function classifySLToBEDecision(trade) {
+  if (!touched1R(trade)) return 'na';      // 1R never touched, decision didn't apply
+  if (!slMovedToBE(trade)) return 'na';    // user didn't shift to BE
+  const outcome = trade.after1R;
+  if (!outcome) return 'not-logged';
+  if (outcome === 'returned_saved') return 'good';
+  if (outcome === 'returned_lost_winner') return 'bad';
+  return 'irrelevant'; // 'went_through' or 'returned_failed'
+}
+
+// SL → 1R decision (after touching 2R).
+// Returns: 'good' | 'bad' | 'irrelevant' | 'not-logged' | 'na'
+function classifySLToOneRDecision(trade) {
+  if (!touched2R(trade)) return 'na';
+  if (!slMovedToOneR(trade)) return 'na';
+  const outcome = trade.after2R;
+  if (!outcome) return 'not-logged';
+  if (outcome === 'returned_saved') return 'good';
+  if (outcome === 'returned_lost_winner') return 'bad';
+  return 'irrelevant';
+}
+
+// 2R-secured decision (exit was set at 2R and got hit).
+// Returns: 'good' | 'bad' | 'not-logged' | 'na'
+function classify2RSecuredDecision(trade) {
+  const exitStrat = trade && trade.evaluation && trade.evaluation.exit;
+  if (exitStrat !== '2R_secured') return 'na';
+  const outcome = trade.after2RTarget;
+  if (!outcome) return 'not-logged';
+  if (outcome === '2r_was_top') return 'good';
+  if (outcome === 'went_higher') return 'bad';
+  return 'na';
 }
 
 function getBreakevenThreshold() {
@@ -2200,7 +2308,30 @@ function showTradeScreenshot(tradeId) {
   // R-multiple and touched2R
   const tradeR = getRMultiple(trade);
   if (tradeR !== null) addRow('Resultaat (R)', `${tradeR>=0?'+':''}${tradeR.toFixed(2)}R`);
+  if (trade.touched1R) addRow('1R aangeraakt', 'Ja');
   if (trade.touched2R) addRow('2R aangeraakt', 'Ja');
+  if (trade.slToBE) addRow('SL → BE verschoven', 'Ja');
+  if (trade.slToOneR) addRow('SL → 1R verschoven', 'Ja');
+  // Outcomes with human-readable labels
+  const after1RLabels = {
+    'went_through': 'Ging direct verder (shift was irrelevant)',
+    'returned_saved': 'Kwam terug tot initiële SL — shift redde je',
+    'returned_lost_winner': 'Kwam terug, tikte BE-stop, daarna alsnog naar 2R+',
+    'returned_failed': 'Kwam terug, tikte BE-stop, daarna niet meer'
+  };
+  const after2RLabels = {
+    'went_through': 'Ging direct verder naar 3R+ (shift was irrelevant)',
+    'returned_saved': 'Kwam terug tot BE — shift redde je een +1R winst',
+    'returned_lost_winner': 'Kwam terug, tikte 1R-stop, daarna alsnog naar 2R+',
+    'returned_failed': 'Kwam terug, tikte 1R-stop, daarna niet meer'
+  };
+  const after2RTargetLabels = {
+    '2r_was_top': '2R was de top, geen verdere beweging',
+    'went_higher': 'Ging door tot minimaal 3R'
+  };
+  if (trade.after1R && after1RLabels[trade.after1R]) addRow('Wat na 1R', after1RLabels[trade.after1R]);
+  if (trade.after2R && after2RLabels[trade.after2R]) addRow('Wat na 2R', after2RLabels[trade.after2R]);
+  if (trade.after2RTarget && after2RTargetLabels[trade.after2RTarget]) addRow('Wat na 2R-target', after2RTargetLabels[trade.after2RTarget]);
   
   // Trade analyse velden (niet afleidbaar uit screenshot)
   const ev = trade.evaluation || {};
@@ -2365,6 +2496,41 @@ function handleInstrumentChange() {
 
 // When session changes, repopulate the timeblock dropdown to match the session.
 // For 'ander', show extended blocks (incl. evening/night for XAU).
+// Update shift-check pill styles based on whether their checkbox is checked
+function updateShiftCheckStyles() {
+  document.querySelectorAll('.shift-check').forEach(label => {
+    const cb = label.querySelector('input[type="checkbox"]');
+    if (cb && cb.checked) label.classList.add('checked');
+    else label.classList.remove('checked');
+  });
+}
+
+// Show/hide outcome dropdowns based on which shift decisions were made
+function updateShiftFieldVisibility() {
+  const touched1R = document.getElementById('evalTouched1R');
+  const touched2R = document.getElementById('evalTouched2R');
+  const slToBE = document.getElementById('evalSLToBE');
+  const slToOneR = document.getElementById('evalSLToOneR');
+  const exitStrat = document.getElementById('evalExit');
+  
+  const after1RGroup = document.getElementById('outcomeAfter1RGroup');
+  const after2RGroup = document.getElementById('outcomeAfter2RGroup');
+  const after2RTargetGroup = document.getElementById('outcomeAfter2RTargetGroup');
+  
+  // Show "after 1R" outcome only when: 1R was touched AND SL→BE was done
+  if (after1RGroup) {
+    after1RGroup.style.display = (touched1R && touched1R.checked && slToBE && slToBE.checked) ? '' : 'none';
+  }
+  // Show "after 2R" outcome only when: 2R was touched AND SL→1R was done
+  if (after2RGroup) {
+    after2RGroup.style.display = (touched2R && touched2R.checked && slToOneR && slToOneR.checked) ? '' : 'none';
+  }
+  // Show "after 2R-target" outcome only when exit strategy = 2R_secured
+  if (after2RTargetGroup) {
+    after2RTargetGroup.style.display = (exitStrat && exitStrat.value === '2R_secured') ? '' : 'none';
+  }
+}
+
 function handleSessionChange() {
   const sessionEl = document.getElementById('tradeSession');
   const blockEl = document.getElementById('tradeTimeBlock');
@@ -2495,6 +2661,10 @@ async function saveTrade() {
     touched2R: document.getElementById('evalTouched2R').checked,
     touched1R: document.getElementById('evalTouched1R').checked,
     slToBE: document.getElementById('evalSLToBE').checked,
+    slToOneR: document.getElementById('evalSLToOneR').checked,
+    after1R: document.getElementById('evalAfter1R').value,
+    after2R: document.getElementById('evalAfter2R').value,
+    after2RTarget: document.getElementById('evalAfter2RTarget').value,
     evaluation: {
       dailyTrend: document.getElementById('evalDailyTrend').value,
       level: document.getElementById('evalLevel').value,
@@ -2617,6 +2787,13 @@ function editTrade(tradeId) {
   document.getElementById('evalTouched2R').checked = trade.touched2R === true;
   document.getElementById('evalTouched1R').checked = trade.touched1R === true;
   document.getElementById('evalSLToBE').checked = trade.slToBE === true;
+  document.getElementById('evalSLToOneR').checked = trade.slToOneR === true;
+  setVal('evalAfter1R', trade.after1R || '');
+  setVal('evalAfter2R', trade.after2R || '');
+  setVal('evalAfter2RTarget', trade.after2RTarget || '');
+  // Sync visual state for shift-checks and conditional dropdowns
+  updateShiftCheckStyles();
+  updateShiftFieldVisibility();
   setVal('evalAtr', ev.atr);
   setVal('evalMentorFollowed', ev.mentorFollowed);
   setVal('evalMentorName', ev.mentorName);
@@ -2755,6 +2932,16 @@ function clearTradeForm() {
   if (touched1REl) touched1REl.checked = false;
   const slToBEEl = document.getElementById('evalSLToBE');
   if (slToBEEl) slToBEEl.checked = false;
+  const slToOneREl = document.getElementById('evalSLToOneR');
+  if (slToOneREl) slToOneREl.checked = false;
+  // Reset shift-outcome dropdowns
+  ['evalAfter1R', 'evalAfter2R', 'evalAfter2RTarget'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+  // Sync visual state
+  if (typeof updateShiftCheckStyles === 'function') updateShiftCheckStyles();
+  if (typeof updateShiftFieldVisibility === 'function') updateShiftFieldVisibility();
   // Hide custom instrument input and mentor field
   const customInput = document.getElementById('tradeInstrumentCustom');
   if (customInput) customInput.style.display = 'none';
@@ -2947,7 +3134,7 @@ function renderHistory() {
   if (state.trades.length === 0) {
     allEl.innerHTML = '<div class="empty-state">Nog geen trades.</div>';
   } else {
-    let html = '<table><thead><tr><th>Datum</th><th>Entry</th><th>Exit</th><th>Duur</th><th>Instrument</th><th>Richting</th><th>Setup</th><th>P&L</th><th>R</th><th>2R advies</th><th>BE-shift advies</th><th>Plan?</th><th>Score</th><th>Acties</th></tr></thead><tbody>';
+    let html = '<table><thead><tr><th>Datum</th><th>Entry</th><th>Exit</th><th>Duur</th><th>Instrument</th><th>Richting</th><th>Setup</th><th>P&L</th><th>R</th><th>2R advies</th><th>Stop-shift advies</th><th>Plan?</th><th>Score</th><th>Acties</th></tr></thead><tbody>';
     let prevDate = null;
     state.trades.forEach(t => {
       const d = new Date(t.timestamp);
@@ -2980,29 +3167,41 @@ function renderHistory() {
       } else {
         pnlCell = `<td class="${t.pnl>=0?'pnl-positive':'pnl-negative'}">€${t.pnl.toFixed(2)}</td>`;
       }
-      // 2R advice column
+      // 2R advice column - now uses explicit after2RTarget data when available
       let adviceCell = '<span style="color:#475569;">—</span>';
-      if (touched2R(t)) {
-        const exitStrat = t.evaluation && t.evaluation.exit;
-        if (exitStrat === '2R_secured') {
-          adviceCell = '<span style="color:#60a5fa; font-size:11px;">2R gepakt ✓</span>';
-        } else if (r !== null) {
+      const exitStrat = t.evaluation && t.evaluation.exit;
+      if (exitStrat === '2R_secured') {
+        // Trade was secured at 2R. Did it go higher afterwards?
+        const ofterTarget = t.after2RTarget;
+        if (ofterTarget === '2r_was_top') {
+          adviceCell = '<span style="color:#10b981; font-size:11px;">✓ 2R was top</span>';
+        } else if (ofterTarget === 'went_higher') {
+          adviceCell = '<span style="color:#ef4444; font-size:11px;">✗ Had laten lopen (3R+)</span>';
+        } else {
+          adviceCell = '<span style="color:#60a5fa; font-size:11px;">2R gepakt</span>';
+        }
+      } else if (touched2R(t)) {
+        // Trade touched 2R but exit wasn't '2R_secured' — they let it run.
+        // Use R-multiple to judge whether letting it run was good.
+        if (r !== null) {
           if (r > 2.1) adviceCell = '<span style="color:#10b981; font-size:11px;">✓ Laten lopen</span>';
           else if (r < 1.9) adviceCell = '<span style="color:#ef4444; font-size:11px;">✗ Had beter 2R gepakt</span>';
           else adviceCell = '<span style="color:#f59e0b; font-size:11px;">≈ Gelijk uit</span>';
         }
       }
-      // BE-shift advice column
-      let beShiftCell = '<span style="color:#475569;">—</span>';
-      const slDecision = classifySLDecision(t);
-      if (slDecision === 'correct-shift') {
-        beShiftCell = '<span style="color:#10b981; font-size:11px;">✓ Goed verschoven</span>';
-      } else if (slDecision === 'wrong-shift') {
-        beShiftCell = '<span style="color:#ef4444; font-size:11px;">✗ Had niet moeten schuiven</span>';
-      } else if (slDecision === 'correct-no-shift') {
-        beShiftCell = '<span style="color:#10b981; font-size:11px;">✓ Terecht niet geschoven</span>';
-      } else if (slDecision === 'wrong-no-shift') {
-        beShiftCell = '<span style="color:#ef4444; font-size:11px;">✗ Had moeten schuiven</span>';
+      // Stop-shift advice column: combines SL→BE and SL→1R decisions
+      let shiftCell = '<span style="color:#475569;">—</span>';
+      const beD = classifySLToBEDecision(t);
+      const oneRD = classifySLToOneRDecision(t);
+      const parts = [];
+      if (beD === 'good') parts.push('<span style="color:#10b981;">✓ SL→BE</span>');
+      else if (beD === 'bad') parts.push('<span style="color:#ef4444;">✗ SL→BE</span>');
+      else if (beD === 'not-logged' && slMovedToBE(t)) parts.push('<span style="color:#fbbf24;">? SL→BE</span>');
+      if (oneRD === 'good') parts.push('<span style="color:#10b981;">✓ SL→1R</span>');
+      else if (oneRD === 'bad') parts.push('<span style="color:#ef4444;">✗ SL→1R</span>');
+      else if (oneRD === 'not-logged' && slMovedToOneR(t)) parts.push('<span style="color:#fbbf24;">? SL→1R</span>');
+      if (parts.length > 0) {
+        shiftCell = `<div style="font-size:11px; display:flex; flex-direction:column; gap:2px;">${parts.join('')}</div>`;
       }
       // Count screenshots
       const screenshotCount = Array.isArray(t.screenshots) && t.screenshots.length > 0
@@ -3024,7 +3223,7 @@ function renderHistory() {
         ${pnlCell}
         <td>${rCell}</td>
         <td>${adviceCell}</td>
-        <td>${beShiftCell}</td>
+        <td>${shiftCell}</td>
         <td>${t.planFollowed}</td>
         <td>${t.checklistScore || '-'}</td>
         <td>${actionBtns}</td>
@@ -3285,97 +3484,123 @@ function render2RAnalysis(trades) {
   </div>`;
 }
 
-// ====== SL NAAR BE: VERSCHUIVEN OF NIET? Analyse ======
-function renderSLToBEAnalysis(trades) {
-  const reached1R = trades.filter(t => touched1R(t));
+// ====== STOP-SHIFT ANALYSE: 3 beslissings-kaarten ======
+
+// Helper: build a shift-analysis card with consistent layout
+function buildShiftCard(title, emoji, intro, decisions, scope) {
+  const good = decisions.filter(d => d === 'good').length;
+  const bad = decisions.filter(d => d === 'bad').length;
+  const irrelevant = decisions.filter(d => d === 'irrelevant').length;
+  const notLogged = decisions.filter(d => d === 'not-logged').length;
+  const total = decisions.length;
   
-  if (reached1R.length < 3) {
+  if (total === 0) {
     return `<div class="card" style="background:#0f172a; margin-top:20px;">
-      <h3 style="margin-top:0;">🛡️ SL naar BE: verschuiven of laten?</h3>
-      <div style="color:#94a3b8; font-size:14px;">
-        Nog niet genoeg data. Vink "1R aangeraakt" en "SL verschoven naar BE" aan bij minstens 3 trades die het 1R-niveau hebben bereikt.
-      </div>
-      <div style="color:#64748b; font-size:13px; margin-top:8px;">
-        Status: ${reached1R.length} trade(s) met 1R aangeraakt.
-      </div>
+      <h3 style="margin-top:0;">${emoji} ${title}</h3>
+      <div style="color:#94a3b8; font-size:14px;">${intro}</div>
+      <div style="color:#64748b; font-size:13px; margin-top:8px;">Status: 0 relevante trades.</div>
     </div>`;
   }
   
-  const shifted = reached1R.filter(t => slMovedToBE(t));
-  const notShifted = reached1R.filter(t => !slMovedToBE(t));
+  const decided = good + bad; // BE-irrelevant cases excluded
+  const goodPct = decided > 0 ? (good / decided * 100) : null;
   
-  const shiftedWins = shifted.filter(t => classifyTrade(t) === 'win').length;
-  const shiftedBE = shifted.filter(t => classifyTrade(t) === 'breakeven').length;
-  const shiftedLoss = shifted.filter(t => classifyTrade(t) === 'loss').length;
-  
-  const notShiftedWins = notShifted.filter(t => classifyTrade(t) === 'win').length;
-  const notShiftedBE = notShifted.filter(t => classifyTrade(t) === 'breakeven').length;
-  const notShiftedLoss = notShifted.filter(t => classifyTrade(t) === 'loss').length;
-  
-  const wrongShifts = shiftedBE; // shifted to BE, ended at BE → possibly gave up a winner
-  const wrongNoShifts = notShiftedLoss; // didn't shift, got stopped out → would have been BE
-  
-  const totalShiftDecisions = shifted.length;
-  const totalNoShiftDecisions = notShifted.length;
-  
+  // Verdict
   let verdict = '';
   let verdictColor = '#94a3b8';
-  
-  const shiftMistakeRate = totalShiftDecisions > 0 ? wrongShifts / totalShiftDecisions : 0;
-  const noShiftMistakeRate = totalNoShiftDecisions > 0 ? wrongNoShifts / totalNoShiftDecisions : 0;
-  
-  if (totalShiftDecisions >= 3 && totalNoShiftDecisions >= 3) {
-    if (shiftMistakeRate > 0.4 && shiftMistakeRate > noShiftMistakeRate + 0.2) {
-      verdict = `❌ <strong>Je verschuift te vaak naar BE.</strong> ${wrongShifts} van je ${totalShiftDecisions} verschuif-beslissingen werden BE-stops (mogelijk winst weggegeven). Overweeg om SL vaker op de initiële plaats te laten.`;
-      verdictColor = '#ef4444';
-    } else if (noShiftMistakeRate > 0.4 && noShiftMistakeRate > shiftMistakeRate + 0.2) {
-      verdict = `❌ <strong>Je verschuift te weinig naar BE.</strong> ${wrongNoShifts} van je ${totalNoShiftDecisions} niet-verschuif-beslissingen werden volledige losses (zou BE geweest zijn). Je laat verlies zwaarder wegen dan nodig.`;
-      verdictColor = '#ef4444';
-    } else if (Math.abs(shiftMistakeRate - noShiftMistakeRate) < 0.15) {
-      verdict = `⚖️ <strong>Je BE-verschuif keuzes zijn redelijk gebalanceerd.</strong> Verschuiven gaf ${(shiftMistakeRate*100).toFixed(0)}% gemiste winsten, niet-verschuiven ${(noShiftMistakeRate*100).toFixed(0)}% vermijdbare losses.`;
-      verdictColor = '#f59e0b';
-    } else {
-      verdict = `✓ <strong>Geen duidelijk patroon.</strong> Verschuiven gaf ${(shiftMistakeRate*100).toFixed(0)}% BE-stops, niet-verschuiven gaf ${(noShiftMistakeRate*100).toFixed(0)}% volledige losses.`;
-      verdictColor = '#94a3b8';
-    }
+  if (decided < 3) {
+    verdict = `ℹ️ Te weinig beslissende data (${decided} trade(s) waarbij het ertoe deed). Speel je strategie verder door en vink consequent de uitkomst-dropdown aan.`;
+  } else if (goodPct >= 70) {
+    verdict = `✅ <strong>Sterke beslissing.</strong> ${good} van ${decided} keer was het de juiste keuze (${goodPct.toFixed(0)}%). Blijf dit doen.`;
+    verdictColor = '#10b981';
+  } else if (goodPct <= 30) {
+    verdict = `❌ <strong>Slechte beslissing.</strong> Slechts ${good} van ${decided} keer was het de juiste keuze (${goodPct.toFixed(0)}%). Overweeg deze stop-shift af te leren.`;
+    verdictColor = '#ef4444';
   } else {
-    verdict = `ℹ️ Te weinig data voor harde conclusie. Nodig: minstens 3 trades waarbij je SL naar BE schoof, én minstens 3 waarbij je het niet deed.`;
+    verdict = `⚖️ <strong>Gemengd resultaat.</strong> ${good} van ${decided} keer was het juist (${goodPct.toFixed(0)}%). Context maakt verschil — bestudeer de slechte trades.`;
+    verdictColor = '#f59e0b';
   }
   
+  const goodPctBar = decided > 0 ? (good / decided * 100) : 0;
+  const badPctBar = decided > 0 ? (bad / decided * 100) : 0;
+  
   return `<div class="card" style="background:linear-gradient(135deg, #0f172a, #1e293b); border:1px solid #334155; margin-top:20px;">
-    <h3 style="margin-top:0; display:flex; align-items:center; gap:8px;">🛡️ SL naar BE: verschuiven of laten?</h3>
-    <div style="color:#94a3b8; font-size:13px; margin-bottom:16px;">
-      Analyse over ${reached1R.length} trades die het 1R-niveau hebben aangeraakt.
-    </div>
+    <h3 style="margin-top:0; display:flex; align-items:center; gap:8px;">${emoji} ${title}</h3>
+    <div style="color:#94a3b8; font-size:13px; margin-bottom:16px;">${scope}</div>
     
-    <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(300px, 1fr)); gap:14px; margin-bottom:16px;">
-      <div style="background:#0f172a; padding:14px; border-radius:8px; border-left:3px solid #60a5fa;">
-        <div style="font-size:13px; color:#cbd5e1; font-weight:600; margin-bottom:8px;">Je verschoof naar BE</div>
-        <div style="font-size:22px; font-weight:700; color:#60a5fa;">${totalShiftDecisions} trade(s)</div>
-        <div style="font-size:12px; color:#94a3b8; margin-top:8px; line-height:1.6;">
-          <span class="pnl-positive">✓ ${shiftedWins} hit TP</span> (verschuif maakte niet uit)<br>
-          <span style="color:#94a3b8;">○ ${shiftedBE} ging naar BE</span> ← <strong style="color:#fbbf24;">mogelijk gemiste winst</strong><br>
-          ${shiftedLoss > 0 ? `<span class="pnl-negative">✗ ${shiftedLoss} loss</span> (zeldzaam, slippage?)<br>` : ''}
-        </div>
+    <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(140px, 1fr)); gap:12px; margin-bottom:16px;">
+      <div style="background:#0f172a; padding:14px; border-radius:8px; border-left:3px solid #10b981;">
+        <div style="font-size:11px; color:#94a3b8; text-transform:uppercase; letter-spacing:0.5px;">Goede keuze</div>
+        <div style="font-size:24px; font-weight:700; color:#10b981; margin:4px 0;">${good}</div>
       </div>
-      <div style="background:#0f172a; padding:14px; border-radius:8px; border-left:3px solid #fbbf24;">
-        <div style="font-size:13px; color:#cbd5e1; font-weight:600; margin-bottom:8px;">Je verschoof NIET</div>
-        <div style="font-size:22px; font-weight:700; color:#fbbf24;">${totalNoShiftDecisions} trade(s)</div>
-        <div style="font-size:12px; color:#94a3b8; margin-top:8px; line-height:1.6;">
-          <span class="pnl-positive">✓ ${notShiftedWins} hit TP</span> (terecht niet verschoven)<br>
-          <span class="pnl-negative">✗ ${notShiftedLoss} volledige loss</span> ← <strong style="color:#ef4444;">had BE geweest met shift</strong><br>
-          ${notShiftedBE > 0 ? `<span style="color:#94a3b8;">○ ${notShiftedBE} BE</span><br>` : ''}
-        </div>
+      <div style="background:#0f172a; padding:14px; border-radius:8px; border-left:3px solid #ef4444;">
+        <div style="font-size:11px; color:#94a3b8; text-transform:uppercase; letter-spacing:0.5px;">Slechte keuze</div>
+        <div style="font-size:24px; font-weight:700; color:#ef4444; margin:4px 0;">${bad}</div>
       </div>
+      <div style="background:#0f172a; padding:14px; border-radius:8px; border-left:3px solid #64748b;">
+        <div style="font-size:11px; color:#94a3b8; text-transform:uppercase; letter-spacing:0.5px;">Irrelevant</div>
+        <div style="font-size:24px; font-weight:700; color:#94a3b8; margin:4px 0;">${irrelevant}</div>
+        <div style="font-size:11px; color:#64748b;">trade verliep zo dat shift niet uitmaakte</div>
+      </div>
+      ${notLogged > 0 ? `<div style="background:#0f172a; padding:14px; border-radius:8px; border-left:3px solid #fbbf24;">
+        <div style="font-size:11px; color:#94a3b8; text-transform:uppercase; letter-spacing:0.5px;">Niet ingevuld</div>
+        <div style="font-size:24px; font-weight:700; color:#fbbf24; margin:4px 0;">${notLogged}</div>
+        <div style="font-size:11px; color:#64748b;">vul outcome in via Bewerken</div>
+      </div>` : ''}
     </div>
     
-    <div style="background:rgba(${verdictColor === '#10b981' ? '16,185,129' : verdictColor === '#ef4444' ? '239,68,68' : '245,158,11'},0.1); border-left:3px solid ${verdictColor}; padding:12px 14px; border-radius:6px; color:#e2e8f0; font-size:14px; line-height:1.5;">${verdict}</div>
+    ${decided >= 1 ? `<div style="background:#0f172a; padding:14px; border-radius:8px; margin-bottom:14px;">
+      <div style="font-size:12px; color:#cbd5e1; font-weight:600; margin-bottom:8px;">Goed vs slecht (van beslissende trades)</div>
+      <div style="display:flex; height:24px; border-radius:6px; overflow:hidden; background:#1e293b;">
+        <div style="width:${goodPctBar}%; background:linear-gradient(90deg,#10b981,#34d399); display:flex; align-items:center; justify-content:center; color:white; font-size:12px; font-weight:600;">${goodPctBar > 10 ? goodPctBar.toFixed(0)+'%' : ''}</div>
+        <div style="width:${badPctBar}%; background:linear-gradient(90deg,#ef4444,#f87171); display:flex; align-items:center; justify-content:center; color:white; font-size:12px; font-weight:600;">${badPctBar > 10 ? badPctBar.toFixed(0)+'%' : ''}</div>
+      </div>
+    </div>` : ''}
     
-    <div style="font-size:11px; color:#64748b; margin-top:12px; font-style:italic;">
-      Mogelijk gemiste winst = je verschoof, kreeg BE, terwijl trade misschien daarna naar TP ging. Vermijdbaar verlies = je verschoof niet, raakte initiële SL, terwijl shift naar BE de positie had gered.
-    </div>
+    <div style="background:rgba(${verdictColor === '#10b981' ? '16,185,129' : verdictColor === '#ef4444' ? '239,68,68' : verdictColor === '#f59e0b' ? '245,158,11' : '148,163,184'},0.1); border-left:3px solid ${verdictColor}; padding:12px 14px; border-radius:6px; color:#e2e8f0; font-size:14px; line-height:1.5;">${verdict}</div>
   </div>`;
 }
+
+function renderSLToBEAnalysis(trades) {
+  // Build list of decisions for SL→BE shifts that were actually made
+  const decisions = trades
+    .map(t => classifySLToBEDecision(t))
+    .filter(d => d !== 'na'); // only trades where the decision applies
+  return buildShiftCard(
+    'SL → BE bij 1R: goede of slechte keuze?',
+    '🛡️',
+    'Nog niet genoeg data. Voor trades waarbij je je SL naar BE schoof (na 1R aangeraakt), vink de uitkomst-dropdown aan om deze analyse te zien.',
+    decisions,
+    `Analyse over ${decisions.length} trades waarbij je je SL naar BE verschoof.`
+  );
+}
+
+function renderSLToOneRAnalysis(trades) {
+  const decisions = trades
+    .map(t => classifySLToOneRDecision(t))
+    .filter(d => d !== 'na');
+  return buildShiftCard(
+    'SL → 1R bij 2R: goede of slechte keuze?',
+    '🛡️',
+    'Nog niet genoeg data. Voor trades waarbij je je SL naar 1R schoof (na 2R aangeraakt), vink de uitkomst-dropdown aan om deze analyse te zien.',
+    decisions,
+    `Analyse over ${decisions.length} trades waarbij je je SL naar 1R verschoof.`
+  );
+}
+
+function render2RSecuredAnalysis(trades) {
+  const decisions = trades
+    .map(t => classify2RSecuredDecision(t))
+    .filter(d => d !== 'na');
+  return buildShiftCard(
+    '2R gepakt (safe): goede of slechte keuze?',
+    '🎯',
+    'Nog niet genoeg data. Voor trades met exit-strategie "2R gepakt", vink in de uitkomst-dropdown aan of de prijs daarna nog verder ging.',
+    decisions,
+    `Analyse over ${decisions.length} trades waarbij je vooraf vastklikte op 2R.`
+  );
+}
+
 
 function renderInsights() {
   const el = document.getElementById('insightsContent');
@@ -3506,11 +3731,13 @@ function renderInsights() {
     </div>
   </div>`;
   
-  // ====== 2R PAKKEN OF LATEN LOPEN? ======
+  // ====== 2R PAKKEN OF LATEN LOPEN? (de oude/heuristische kaart) ======
   html += render2RAnalysis(filtered);
   
-  // ====== SL NAAR BE: VERSCHUIVEN OF LATEN? ======
+  // ====== Drie nieuwe stop-shift beslissings-analyses ======
   html += renderSLToBEAnalysis(filtered);
+  html += renderSLToOneRAnalysis(filtered);
+  html += render2RSecuredAnalysis(filtered);
   
   // Breakdown by instrument (only show when "all")
   if (insightsFilterInstrument === 'all') {
@@ -4101,6 +4328,9 @@ async function init() {
   setupPasteHandler();
   // Populate timeblock dropdown based on initial session selection
   if (typeof handleSessionChange === 'function') handleSessionChange();
+  // Sync stop-shift UI state
+  if (typeof updateShiftCheckStyles === 'function') updateShiftCheckStyles();
+  if (typeof updateShiftFieldVisibility === 'function') updateShiftFieldVisibility();
   
   // Wait for Supabase library to be available (max 5 seconds)
   let waited = 0;
