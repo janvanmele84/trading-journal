@@ -608,6 +608,10 @@
           </select>
         </div>
         <div class="form-group">
+          <label>Datum trade</label>
+          <input type="date" id="tradeDate" style="padding:8px 10px; background:#0f172a; border:1px solid #334155; color:#e2e8f0; border-radius:6px; font-size:14px;">
+        </div>
+        <div class="form-group">
           <label>Exact uur entry (uu:mm)</label>
           <input type="time" id="tradeExactTime" placeholder="HH:MM" oninput="updateTradeDuration()">
         </div>
@@ -782,6 +786,7 @@
             <option value="">-- Selecteer --</option>
             <option value="2R_secured">2R gepakt</option>
             <option value="trailed_sl">SL mee verschoven (+2R)</option>
+            <option value="be_stopped">BE uitgetikt (SL stond op BE)</option>
             <option value="manual_exit">Handmatig gesloten</option>
             <option value="stopped_out" selected>Stoploss geraakt</option>
           </select>
@@ -1574,6 +1579,7 @@ const LABEL_TRANSLATIONS = {
   // Exit strategy
   '2R_secured': '2R gepakt',
   'trailed_sl': 'SL mee verschoven (+2R)',
+  'be_stopped': 'BE uitgetikt',
   'manual_exit': 'Handmatig gesloten',
   'stopped_out': 'Stoploss geraakt',
   'full_target': 'Volledige target',
@@ -2641,10 +2647,35 @@ async function saveTrade() {
   
   const existingTrade = editingTradeId ? state.trades.find(t => t.id === editingTradeId) : null;
   
+  // Get chosen date from input; fallback to existing (edit) or today (new)
+  const dateInput = document.getElementById('tradeDate');
+  const chosenDate = (dateInput && dateInput.value) 
+    ? dateInput.value 
+    : (existingTrade ? existingTrade.date : today());
+  
+  // If date was changed vs original, adjust timestamp so time-of-day is preserved but date reflects the new choice
+  let tradeTimestamp;
+  if (existingTrade) {
+    // Existing trade: keep original time-of-day, apply new date if changed
+    if (chosenDate !== existingTrade.date) {
+      const origTime = new Date(existingTrade.timestamp);
+      tradeTimestamp = new Date(`${chosenDate}T${String(origTime.getHours()).padStart(2,'0')}:${String(origTime.getMinutes()).padStart(2,'0')}:${String(origTime.getSeconds()).padStart(2,'0')}`).toISOString();
+    } else {
+      tradeTimestamp = existingTrade.timestamp;
+    }
+  } else {
+    // New trade: if date is not today, use noon of that date; otherwise use current time
+    if (chosenDate !== today()) {
+      tradeTimestamp = new Date(`${chosenDate}T12:00:00`).toISOString();
+    } else {
+      tradeTimestamp = new Date().toISOString();
+    }
+  }
+  
   const trade = {
     id: existingTrade ? existingTrade.id : `t_${Date.now()}_${Math.random().toString(36).substr(2,5)}`,
-    timestamp: existingTrade ? existingTrade.timestamp : new Date().toISOString(),
-    date: existingTrade ? existingTrade.date : today(),
+    timestamp: tradeTimestamp,
+    date: chosenDate,
     instrument: getInstrumentValue(),
     direction: document.getElementById('tradeDirection').value,
     session: document.getElementById('tradeSession').value,
@@ -2759,6 +2790,8 @@ function editTrade(tradeId) {
   // Re-sync timeblock options before setting the value (so the trade's value can exist)
   if (typeof handleSessionChange === 'function') handleSessionChange();
   setVal('tradeTimeBlock', trade.timeBlock);
+  // Pre-fill trade date (fall back to today if missing)
+  setVal('tradeDate', trade.date || today());
   setVal('tradeExactTime', trade.exactTime);
   setVal('tradeExitTime', trade.exitTime);
   updateTradeDuration();
@@ -2899,6 +2932,9 @@ function clearTradeForm() {
     const el = document.getElementById(id);
     if (el) el.value = '';
   });
+  // Reset date to today
+  const dateEl = document.getElementById('tradeDate');
+  if (dateEl) dateEl.value = today();
   // Reset duration display
   const durDisplay = document.getElementById('tradeDurationDisplay');
   if (durDisplay) {
@@ -3136,13 +3172,18 @@ function renderHistory() {
   } else {
     let html = '<table><thead><tr><th>Datum</th><th>Entry</th><th>Exit</th><th>Duur</th><th>Instrument</th><th>Richting</th><th>Setup</th><th>P&L</th><th>R</th><th>2R advies</th><th>Stop-shift advies</th><th>Plan?</th><th>Score</th><th>Acties</th></tr></thead><tbody>';
     let prevDate = null;
+    let renderErrors = 0;
     state.trades.forEach(t => {
-      const d = new Date(t.timestamp);
-      const entryTime = t.exactTime || d.toLocaleTimeString('nl-BE', {hour:'2-digit', minute:'2-digit'});
-      const exitTime = t.exitTime || '-';
-      const duration = t.durationMinutes !== null && t.durationMinutes !== undefined 
-        ? formatDuration(t.durationMinutes) 
-        : '-';
+      try {
+        // Defensive defaults for possibly missing fields on legacy trades
+        const pnl = (typeof t.pnl === 'number' && isFinite(t.pnl)) ? t.pnl : 0;
+        const timestamp = t.timestamp || (t.date ? `${t.date}T12:00:00` : new Date().toISOString());
+        const d = new Date(timestamp);
+        const entryTime = t.exactTime || (isFinite(d.getTime()) ? d.toLocaleTimeString('nl-BE', {hour:'2-digit', minute:'2-digit'}) : '-');
+        const exitTime = t.exitTime || '-';
+        const duration = t.durationMinutes !== null && t.durationMinutes !== undefined 
+          ? formatDuration(t.durationMinutes) 
+          : '-';
       // Day separator: thick top border when date changes (vs previous row)
       const isNewDay = prevDate !== null && t.date !== prevDate;
       const rowStyle = isNewDay ? ' style="border-top:2px solid #475569;"' : '';
@@ -3163,9 +3204,9 @@ function renderHistory() {
       // P&L cell — BE in grey
       let pnlCell;
       if (isBE) {
-        pnlCell = `<td style="color:#94a3b8;">€${t.pnl.toFixed(2)}</td>`;
+        pnlCell = `<td style="color:#94a3b8;">€${pnl.toFixed(2)}</td>`;
       } else {
-        pnlCell = `<td class="${t.pnl>=0?'pnl-positive':'pnl-negative'}">€${t.pnl.toFixed(2)}</td>`;
+        pnlCell = `<td class="${pnl>=0?'pnl-positive':'pnl-negative'}">€${pnl.toFixed(2)}</td>`;
       }
       // 2R advice column - now uses explicit after2RTarget data when available
       let adviceCell = '<span style="color:#475569;">—</span>';
@@ -3217,18 +3258,33 @@ function renderHistory() {
         <td>${entryTime}</td>
         <td>${exitTime}</td>
         <td>${duration}</td>
-        <td>${t.instrument}</td>
-        <td>${t.direction}</td>
+        <td>${t.instrument || '-'}</td>
+        <td>${t.direction || '-'}</td>
         <td>${t.setup || '-'}</td>
         ${pnlCell}
         <td>${rCell}</td>
         <td>${adviceCell}</td>
         <td>${shiftCell}</td>
-        <td>${t.planFollowed}</td>
+        <td>${t.planFollowed || '-'}</td>
         <td>${t.checklistScore || '-'}</td>
         <td>${actionBtns}</td>
       </tr>`;
+      } catch (err) {
+        renderErrors++;
+        console.error('Trade render error for trade:', t && t.id, err, t);
+        // Render a minimal fallback row so the trade still appears
+        html += `<tr style="background:rgba(239,68,68,0.05);">
+          <td colspan="14" style="color:#ef4444; font-size:12px; padding:8px;">
+            ⚠️ Kon deze trade niet volledig renderen (id: ${(t && t.id) || 'onbekend'}). Foutmelding in console. Trade is niet verloren.
+          </td>
+        </tr>`;
+      }
     });
+    if (renderErrors > 0) {
+      html = `<div style="background:rgba(239,68,68,0.1); border:1px solid #ef4444; padding:10px 14px; border-radius:6px; color:#ef4444; font-size:13px; margin-bottom:12px;">
+        ⚠️ ${renderErrors} trade(s) konden niet volledig gerenderd worden (details in browser-console via F12). De andere trades staan hieronder.
+      </div>` + html;
+    }
     html += '</tbody></table>';
     allEl.innerHTML = html;
   }
@@ -4326,6 +4382,9 @@ async function init() {
   showDate();
   setupNavigation();
   setupPasteHandler();
+  // Set date input default to today
+  const dateEl = document.getElementById('tradeDate');
+  if (dateEl) dateEl.value = today();
   // Populate timeblock dropdown based on initial session selection
   if (typeof handleSessionChange === 'function') handleSessionChange();
   // Sync stop-shift UI state
