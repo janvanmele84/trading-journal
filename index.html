@@ -1052,6 +1052,30 @@
       <button class="secondary" onclick="exportData()">Export alle data (JSON)</button>
       <button class="danger" onclick="resetAllData()" style="margin-left:8px;">Reset alle data</button>
     </div>
+    <div class="card" id="migrationCard">
+      <h2>📸 Screenshot Migratie</h2>
+      <p style="color:#94a3b8; font-size:13px; margin-bottom:12px;">
+        Screenshots werden vroeger als base64 opgeslagen in de trades-tabel. Dit maakte de tabel te zwaar en veroorzaakte time-outs. 
+        Deze migratie verplaatst alle screenshots naar Supabase Storage, en verwijdert daarna de base64-data uit de trades.
+      </p>
+      <div id="migrationStatus" style="background:#0f172a; padding:12px; border-radius:6px; margin-bottom:12px; font-size:13px; color:#cbd5e1;">
+        Klik "Analyseren" om te zien hoeveel trades er nog gemigreerd moeten worden.
+      </div>
+      <div style="display:flex; gap:8px; flex-wrap:wrap;">
+        <button class="secondary" onclick="analyzeMigration()">🔍 Analyseren</button>
+        <button class="primary" id="btnStartMigration" onclick="startScreenshotMigration()" style="display:none;">▶️ Start migratie</button>
+        <button class="secondary" id="btnDownloadBackup" onclick="downloadMigrationBackup()" style="display:none;">💾 Backup CSV downloaden</button>
+      </div>
+      <div id="migrationProgress" style="display:none; margin-top:12px;">
+        <div style="background:#0f172a; border-radius:6px; padding:12px;">
+          <div id="migrationProgressText" style="color:#cbd5e1; font-size:13px; margin-bottom:8px;">Voorbereiden...</div>
+          <div style="background:#1e293b; height:8px; border-radius:4px; overflow:hidden;">
+            <div id="migrationProgressBar" style="background:linear-gradient(90deg,#60a5fa,#3b82f6); height:100%; width:0%; transition:width 0.3s;"></div>
+          </div>
+          <div id="migrationLog" style="margin-top:12px; max-height:200px; overflow-y:auto; font-family:monospace; font-size:11px; color:#94a3b8;"></div>
+        </div>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -1486,6 +1510,49 @@ const cloudStorage = {
     if (error) { console.error(error); return []; }
     return data || [];
   },
+  // Load trades WITHOUT the heavy base64 screenshot fields (data.screenshot and data.screenshots).
+  // Uses a client-side strip because PostgREST cannot exclude nested JSONB properties in select().
+  // For the screenshotPaths (light strings), those are kept.
+  // This is fast for lightly-loaded trades (already migrated), but for still-unmigrated trades
+  // Supabase must serialize the base64 into JSON first — for those we fall back to a paged fetch.
+  async getAllTradesLight() {
+    if (!sb || !currentUser) return [];
+    // Fetch only id, user_id, created_at, and a JSONB projection excluding the heavy fields.
+    // PostgREST syntax: use `data->fieldname` for extracting individual JSONB fields.
+    // Since we can't use "exclude" we fetch each needed field explicitly.
+    const lightFields = [
+      'id','pnl','date','exit','size','stop','entry','setup','reason','target','lessons',
+      'session','emotions','exitTime','direction','exactTime','timeBlock','timestamp',
+      'evaluation','instrument','improvement','planFollowed','preTradeCheck','checklistScore',
+      'touched1R','touched2R','slToBE','slToOneR','after1R','after2R','after2RTarget',
+      'screenshotPaths'
+    ];
+    // Build a select expression for each nested field: data->field
+    const selectParts = ['id','user_id','created_at'];
+    lightFields.forEach(f => selectParts.push(`data->${f}`));
+    const selectStr = selectParts.join(',');
+    const { data, error } = await sb.from('trades')
+      .select(selectStr)
+      .eq('user_id', currentUser.id);
+    if (error) { console.error('getAllTradesLight error:', error); return []; }
+    // Reconstruct trade objects: fields come back as top-level keys named "field"
+    return (data || []).map(row => {
+      const obj = { id: row.id, user_id: row.user_id, created_at: row.created_at, data: {} };
+      lightFields.forEach(f => {
+        if (row[f] !== undefined) obj.data[f] = row[f];
+      });
+      return obj;
+    });
+  },
+  // Fetch a single trade FULL (including screenshots) by trade id. Used for on-demand loading
+  // of legacy trades that still have base64 in data.screenshot / data.screenshots.
+  async getOneTradeFull(tradeId) {
+    if (!sb || !currentUser) return null;
+    const { data, error } = await sb.from('trades')
+      .select('*').eq('user_id', currentUser.id).eq('id', tradeId).maybeSingle();
+    if (error) { console.error('getOneTradeFull error:', error); return null; }
+    return data;
+  },
   async getOne(table, idField, idValue) {
     if (!sb || !currentUser) return null;
     const { data, error } = await sb.from(table)
@@ -1504,6 +1571,70 @@ const cloudStorage = {
   async delete(table, idField, idValue) {
     if (!sb || !currentUser) return;
     await sb.from(table).delete().eq('user_id', currentUser.id).eq(idField, idValue);
+  }
+};
+
+// ==================== SCREENSHOT STORAGE ====================
+// Screenshots are stored in Supabase Storage (bucket 'trade-screenshots'),
+// not embedded as base64 in trades.data (that made queries huge and time out).
+// Each user has their own folder: trade-screenshots/{user_id}/{trade_id}/{index}.png
+const BUCKET = 'trade-screenshots';
+
+const screenshotStorage = {
+  // Convert a base64 dataURL to a Blob for uploading
+  _base64ToBlob(dataURL) {
+    const parts = dataURL.split(',');
+    const mimeMatch = parts[0].match(/data:([^;]+)/);
+    const mime = mimeMatch ? mimeMatch[1] : 'image/png';
+    const bytes = atob(parts[1]);
+    const buf = new Uint8Array(bytes.length);
+    for (let i = 0; i < bytes.length; i++) buf[i] = bytes.charCodeAt(i);
+    return new Blob([buf], { type: mime });
+  },
+  
+  // Build the storage path for a trade's screenshot at a given index
+  _pathFor(tradeId, index) {
+    return `${currentUser.id}/${tradeId}/${index}.png`;
+  },
+  
+  // Upload a base64 dataURL and return the storage path (not a URL)
+  async upload(tradeId, index, dataURL) {
+    if (!sb || !currentUser) throw new Error('Not authenticated');
+    if (!dataURL || typeof dataURL !== 'string') throw new Error('Invalid dataURL');
+    const blob = this._base64ToBlob(dataURL);
+    const path = this._pathFor(tradeId, index);
+    const { error } = await sb.storage.from(BUCKET).upload(path, blob, {
+      upsert: true,
+      contentType: blob.type
+    });
+    if (error) throw error;
+    return path;
+  },
+  
+  // Fetch a screenshot by path; returns an object URL usable in <img src=...>
+  async fetch(path) {
+    if (!sb || !currentUser) throw new Error('Not authenticated');
+    const { data, error } = await sb.storage.from(BUCKET).download(path);
+    if (error) throw error;
+    return URL.createObjectURL(data);
+  },
+  
+  // Delete a screenshot at a specific path
+  async delete(path) {
+    if (!sb || !currentUser) return;
+    await sb.storage.from(BUCKET).remove([path]);
+  },
+  
+  // Delete all screenshots for a trade
+  async deleteAllForTrade(tradeId) {
+    if (!sb || !currentUser) return;
+    // List all files under {user}/{tradeId}/
+    const prefix = `${currentUser.id}/${tradeId}`;
+    const { data: files } = await sb.storage.from(BUCKET).list(prefix);
+    if (files && files.length > 0) {
+      const paths = files.map(f => `${prefix}/${f.name}`);
+      await sb.storage.from(BUCKET).remove(paths);
+    }
   }
 };
 
@@ -1726,8 +1857,8 @@ async function loadAllData() {
   state.todayChecklist = null;
   
   try {
-    // Load trades
-    const trades = await cloudStorage.getAll('trades');
+    // Load trades WITHOUT heavy base64 screenshots — those get fetched on demand
+    const trades = await cloudStorage.getAllTradesLight();
     state.trades = trades.map(t => ({ ...t, ...(t.data || {}) }));
     state.trades.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
     
@@ -2230,6 +2361,58 @@ function setScreenshot(base64, slot) {
   removeBtn.style.display = 'inline-block';
 }
 
+// Set a screenshot from an existing Storage path (used when editing a saved trade).
+// Stores a "path:<path>" marker in currentScreenshots so saveTrade knows the
+// screenshot is unchanged and doesn't re-upload it.
+function setScreenshotFromPath(path, objectURL, slot) {
+  if (slot === 1) currentScreenshots[0] = 'path:' + path;
+  else if (slot === 2) currentScreenshots[1] = 'path:' + path;
+  else return;
+  
+  const preview = document.getElementById('screenshotPreview' + slot);
+  const placeholder = document.getElementById('screenshotPlaceholder' + slot);
+  const removeBtn = document.getElementById('screenshotRemoveBtn' + slot);
+  if (preview) { preview.src = objectURL; preview.style.display = 'block'; }
+  if (placeholder) placeholder.style.display = 'none';
+  if (removeBtn) removeBtn.style.display = 'inline-block';
+}
+
+// Load screenshots for an existing trade (into the edit form).
+// Handles both new format (screenshotPaths) and legacy format (base64 in trade.screenshot(s)).
+async function loadScreenshotsForEdit(trade) {
+  removeScreenshot(); // clear both slots first
+  const paths = Array.isArray(trade.screenshotPaths) ? trade.screenshotPaths.filter(p => p) : [];
+  
+  if (paths.length > 0) {
+    // New format: fetch each screenshot from Storage as object URL
+    for (let i = 0; i < Math.min(paths.length, 2); i++) {
+      try {
+        const url = await screenshotStorage.fetch(paths[i]);
+        setScreenshotFromPath(paths[i], url, i + 1);
+      } catch (err) {
+        console.error(`Screenshot ${i+1} load failed:`, err);
+      }
+    }
+  } else {
+    // Legacy format: fetch full row (since light-load stripped base64)
+    try {
+      const full = await cloudStorage.getOneTradeFull(trade.id);
+      if (full && full.data) {
+        let legacy = [];
+        if (Array.isArray(full.data.screenshots) && full.data.screenshots.length > 0) {
+          legacy = full.data.screenshots.filter(s => s);
+        } else if (full.data.screenshot) {
+          legacy = [full.data.screenshot];
+        }
+        if (legacy[0]) setScreenshot(legacy[0], 1);
+        if (legacy[1]) setScreenshot(legacy[1], 2);
+      }
+    } catch (err) {
+      console.error('Legacy screenshot load failed:', err);
+    }
+  }
+}
+
 function removeScreenshot(slot) {
   if (slot === 1) currentScreenshots[0] = null;
   else if (slot === 2) currentScreenshots[1] = null;
@@ -2260,7 +2443,7 @@ function removeScreenshot(slot) {
   if (input) input.value = '';
 }
 
-function showTradeScreenshot(tradeId) {
+async function showTradeScreenshot(tradeId) {
   const trade = state.trades.find(t => t.id === tradeId);
   if (!trade) return;
   
@@ -2269,27 +2452,59 @@ function showTradeScreenshot(tradeId) {
   const imagesEl = document.getElementById('screenshotViewerImages');
   const detailsEl = document.getElementById('screenshotViewerDetails');
   
-  // Caption
-  const d = new Date(trade.timestamp);
-  const pnlClass = trade.pnl >= 0 ? 'pnl-positive' : 'pnl-negative';
-  caption.innerHTML = `${trade.instrument} ${trade.direction.toUpperCase()} · ${d.toLocaleDateString('nl-BE')} ${trade.exactTime || ''} · <span class="${pnlClass}">€${trade.pnl.toFixed(2)}</span>`;
+  // Caption (defensive against missing fields)
+  const d = new Date(trade.timestamp || (trade.date ? trade.date + 'T12:00:00' : new Date().toISOString()));
+  const pnlVal = (typeof trade.pnl === 'number') ? trade.pnl : 0;
+  const pnlClass = pnlVal >= 0 ? 'pnl-positive' : 'pnl-negative';
+  const dir = (trade.direction || '').toUpperCase();
+  caption.innerHTML = `${trade.instrument || '-'} ${dir} · ${d.toLocaleDateString('nl-BE')} ${trade.exactTime || ''} · <span class="${pnlClass}">€${pnlVal.toFixed(2)}</span>`;
   
-  // Collect screenshots (new array format OR legacy single field)
-  let screenshots = [];
-  if (Array.isArray(trade.screenshots) && trade.screenshots.length > 0) {
-    screenshots = trade.screenshots.filter(s => s);
-  } else if (trade.screenshot) {
-    screenshots = [trade.screenshot];
+  // Show a loading indicator while we fetch screenshots
+  imagesEl.style.gridTemplateColumns = '1fr';
+  imagesEl.innerHTML = '<div style="color:#94a3b8; padding:20px; text-align:center; background:#1e293b; border-radius:8px;">Screenshots laden...</div>';
+  modal.style.display = 'block';
+  
+  // Determine screenshot sources:
+  // 1. Prefer trade.screenshotPaths (new format — fetch from Storage on demand)
+  // 2. Fall back to trade.screenshots / trade.screenshot if they're base64 (legacy, unmigrated)
+  //    But those aren't in state.trades anymore (light-load), so we must fetch the full row
+  let screenshotSrcs = [];
+  const paths = Array.isArray(trade.screenshotPaths) ? trade.screenshotPaths.filter(p => p) : [];
+  
+  if (paths.length > 0) {
+    // New format: fetch each from Storage
+    for (const path of paths) {
+      try {
+        const url = await screenshotStorage.fetch(path);
+        screenshotSrcs.push(url);
+      } catch (err) {
+        console.error('Screenshot fetch failed for path', path, err);
+      }
+    }
+  } else {
+    // Legacy format — fetch full row from Supabase to check for base64
+    try {
+      const full = await cloudStorage.getOneTradeFull(tradeId);
+      if (full && full.data) {
+        if (Array.isArray(full.data.screenshots) && full.data.screenshots.length > 0) {
+          screenshotSrcs = full.data.screenshots.filter(s => s);
+        } else if (full.data.screenshot) {
+          screenshotSrcs = [full.data.screenshot];
+        }
+      }
+    } catch (err) {
+      console.error('Legacy screenshot fetch failed:', err);
+    }
   }
   
   // Render images grid
-  if (screenshots.length === 0) {
+  if (screenshotSrcs.length === 0) {
     imagesEl.innerHTML = '<div style="color:#64748b; padding:20px; text-align:center; background:#1e293b; border-radius:8px;">Geen screenshots bij deze trade.</div>';
   } else {
-    const gridCols = screenshots.length === 1 ? '1fr' : 'repeat(auto-fit, minmax(400px, 1fr))';
+    const gridCols = screenshotSrcs.length === 1 ? '1fr' : 'repeat(auto-fit, minmax(400px, 1fr))';
     imagesEl.style.gridTemplateColumns = gridCols;
     let html = '';
-    screenshots.forEach((src, i) => {
+    screenshotSrcs.forEach((src, i) => {
       html += `<div style="background:#0f172a; padding:8px; border-radius:8px;">
         <div style="font-size:12px; color:#94a3b8; margin-bottom:6px;">Screenshot ${i + 1}</div>
         <img src="${src}" style="max-width:100%; max-height:70vh; border-radius:4px; display:block; margin:0 auto;">
@@ -2361,8 +2576,6 @@ function showTradeScreenshot(tradeId) {
       <button class="secondary" onclick="closeScreenshotViewer(); editTrade('${trade.id}')">✏️ Bewerken</button>
     `;
   }
-  
-  modal.style.display = 'block';
 }
 
 function closeScreenshotViewer(event) {
@@ -2647,6 +2860,9 @@ async function saveTrade() {
   
   const existingTrade = editingTradeId ? state.trades.find(t => t.id === editingTradeId) : null;
   
+  // Determine trade ID up front so we can upload screenshots to a stable Storage path
+  const tradeId = existingTrade ? existingTrade.id : `t_${Date.now()}_${Math.random().toString(36).substr(2,5)}`;
+  
   // Get chosen date from input; fallback to existing (edit) or today (new)
   const dateInput = document.getElementById('tradeDate');
   const chosenDate = (dateInput && dateInput.value) 
@@ -2672,8 +2888,35 @@ async function saveTrade() {
     }
   }
   
+  // ==== Upload screenshots to Supabase Storage ====
+  // currentScreenshots may hold either a base64 dataURL (newly pasted image) or 
+  // a string starting with "path:" (unchanged existing screenshot, path preserved from edit).
+  // For each slot: if it's a dataURL, upload it. If it's a path marker, keep it as-is.
+  // If it's null, no screenshot in that slot.
+  const screenshotPaths = [];
+  const showBusy = (msg) => showToast(msg);
+  for (let i = 0; i < currentScreenshots.length; i++) {
+    const val = currentScreenshots[i];
+    if (val === null || val === undefined || val === '') continue;
+    if (typeof val === 'string' && val.startsWith('path:')) {
+      // Unchanged existing screenshot — preserve the path (strip prefix)
+      screenshotPaths.push(val.slice(5));
+    } else if (typeof val === 'string' && val.startsWith('data:')) {
+      // New base64 image — upload to Storage
+      try {
+        showBusy(`Screenshot ${i+1} uploaden...`);
+        const path = await screenshotStorage.upload(tradeId, i, val);
+        screenshotPaths.push(path);
+      } catch (err) {
+        console.error(`Screenshot ${i+1} upload failed:`, err);
+        showToast(`Screenshot ${i+1} kon niet worden opgeslagen: ${err.message || err}`, true);
+        return; // Abort save — do not partially save the trade
+      }
+    }
+  }
+  
   const trade = {
-    id: existingTrade ? existingTrade.id : `t_${Date.now()}_${Math.random().toString(36).substr(2,5)}`,
+    id: tradeId,
     timestamp: tradeTimestamp,
     date: chosenDate,
     instrument: getInstrumentValue(),
@@ -2717,8 +2960,8 @@ async function saveTrade() {
       document.getElementById('tradeExactTime').value,
       document.getElementById('tradeExitTime').value
     ),
-    screenshot: currentScreenshots[0], // backwards-compatible primary
-    screenshots: [currentScreenshots[0], currentScreenshots[1]].filter(s => s !== null),
+    // Screenshots: only store paths to Storage, not base64 blobs
+    screenshotPaths: screenshotPaths,
     emotions: {
       stress: parseInt(document.getElementById('emotionStress').value),
       confidence: parseInt(document.getElementById('emotionConfidence').value),
@@ -2764,6 +3007,9 @@ function editTrade(tradeId) {
   if (!trade) return;
   
   editingTradeId = tradeId;
+  
+  // Screenshots will be loaded asynchronously; we set the form up first, then fetch
+  loadScreenshotsForEdit(trade);
   
   // Switch to trade logging panel
   switchToPanel('trades');
@@ -2848,16 +3094,8 @@ function editTrade(tradeId) {
   setVal('tradeReason', trade.reason);
   setVal('tradeLessons', trade.lessons);
   
-  // Screenshots
-  removeScreenshot(); // clear both
-  let existingScreenshots = [];
-  if (Array.isArray(trade.screenshots) && trade.screenshots.length > 0) {
-    existingScreenshots = trade.screenshots.filter(s => s);
-  } else if (trade.screenshot) {
-    existingScreenshots = [trade.screenshot];
-  }
-  if (existingScreenshots[0]) setScreenshot(existingScreenshots[0], 1);
-  if (existingScreenshots[1]) setScreenshot(existingScreenshots[1], 2);
+  // Screenshots are loaded asynchronously (see loadScreenshotsForEdit call above)
+  // — no synchronous work here
   
   // Show edit-mode banner
   showEditBanner(trade);
@@ -2915,6 +3153,9 @@ async function deleteTrade(tradeId) {
   
   try {
     await cloudStorage.delete('trades', 'id', tradeId);
+    // Also delete any screenshots stored in Supabase Storage for this trade
+    try { await screenshotStorage.deleteAllForTrade(tradeId); } 
+    catch (e) { console.warn('Screenshot cleanup failed (non-fatal):', e); }
     state.trades = state.trades.filter(t => t.id !== tradeId);
     showToast('Trade verwijderd');
     renderHistory();
@@ -3165,15 +3406,79 @@ function renderDayStats() {
 }
 
 // ==================== HISTORY ====================
+let historyFilterPeriod = 'last30'; // 'last30', 'last90', 'this_month', 'last_month', 'all'
+
+function setHistoryFilter(value) {
+  historyFilterPeriod = value;
+  renderHistory();
+}
+
+function getFilteredHistoryTrades() {
+  if (historyFilterPeriod === 'all') return state.trades;
+  const now = new Date();
+  const todayStr = now.toISOString().split('T')[0];
+  
+  if (historyFilterPeriod === 'last30') {
+    const cutoff = new Date(now);
+    cutoff.setDate(cutoff.getDate() - 30);
+    const cutoffStr = cutoff.toISOString().split('T')[0];
+    return state.trades.filter(t => t.date >= cutoffStr);
+  }
+  if (historyFilterPeriod === 'last90') {
+    const cutoff = new Date(now);
+    cutoff.setDate(cutoff.getDate() - 90);
+    const cutoffStr = cutoff.toISOString().split('T')[0];
+    return state.trades.filter(t => t.date >= cutoffStr);
+  }
+  if (historyFilterPeriod === 'this_month') {
+    const start = new Date(now.getFullYear(), now.getMonth(), 1);
+    const startStr = start.toISOString().split('T')[0];
+    return state.trades.filter(t => t.date >= startStr && t.date <= todayStr);
+  }
+  if (historyFilterPeriod === 'last_month') {
+    const start = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const end = new Date(now.getFullYear(), now.getMonth(), 0);
+    const startStr = start.toISOString().split('T')[0];
+    const endStr = end.toISOString().split('T')[0];
+    return state.trades.filter(t => t.date >= startStr && t.date <= endStr);
+  }
+  return state.trades;
+}
+
 function renderHistory() {
   const allEl = document.getElementById('allTrades');
-  if (state.trades.length === 0) {
-    allEl.innerHTML = '<div class="empty-state">Nog geen trades.</div>';
+  
+  // Filter dropdown (always shown, above the table)
+  const periodLabels = {
+    'last30': 'Laatste 30 dagen',
+    'last90': 'Laatste 90 dagen',
+    'this_month': 'Deze maand',
+    'last_month': 'Vorige maand',
+    'all': 'Alle tijd'
+  };
+  let filterHtml = '<div style="margin-bottom:16px; display:flex; gap:12px; align-items:center; flex-wrap:wrap;">';
+  filterHtml += '<label style="font-size:13px; color:#94a3b8;">Toon:</label>';
+  filterHtml += `<select onchange="setHistoryFilter(this.value)" style="background:#0f172a; border:1px solid #334155; color:#e2e8f0; padding:8px 12px; border-radius:6px;">`;
+  for (const [val, label] of Object.entries(periodLabels)) {
+    filterHtml += `<option value="${val}" ${historyFilterPeriod===val?'selected':''}>${label}</option>`;
+  }
+  filterHtml += '</select>';
+  const totalCount = state.trades.length;
+  const filtered = getFilteredHistoryTrades();
+  filterHtml += `<span style="font-size:12px; color:#64748b;">${filtered.length} van ${totalCount} trades</span>`;
+  filterHtml += '</div>';
+  
+  if (filtered.length === 0) {
+    if (totalCount === 0) {
+      allEl.innerHTML = filterHtml + '<div class="empty-state">Nog geen trades.</div>';
+    } else {
+      allEl.innerHTML = filterHtml + '<div class="empty-state">Geen trades in deze periode.</div>';
+    }
   } else {
     let html = '<table><thead><tr><th>Datum</th><th>Entry</th><th>Exit</th><th>Duur</th><th>Instrument</th><th>Richting</th><th>Setup</th><th>P&L</th><th>R</th><th>2R advies</th><th>Stop-shift advies</th><th>Plan?</th><th>Score</th><th>Acties</th></tr></thead><tbody>';
     let prevDate = null;
     let renderErrors = 0;
-    state.trades.forEach(t => {
+    filtered.forEach(t => {
       try {
         // Defensive defaults for possibly missing fields on legacy trades
         const pnl = (typeof t.pnl === 'number' && isFinite(t.pnl)) ? t.pnl : 0;
@@ -3286,7 +3591,7 @@ function renderHistory() {
       </div>` + html;
     }
     html += '</tbody></table>';
-    allEl.innerHTML = html;
+    allEl.innerHTML = filterHtml + html;
   }
   
   const histEl = document.getElementById('checklistHistory');
@@ -4272,6 +4577,195 @@ function loadSettings() {
 }
 
 // ==================== EXPORT / RESET ====================
+// ==================== SCREENSHOT MIGRATION ====================
+// One-time migration: move base64 screenshots out of trades.data into Supabase Storage.
+// Safe: processes one trade at a time, keeps trade intact if upload fails.
+
+let migrationState = { needsMigration: [], analyzed: false };
+
+async function analyzeMigration() {
+  const statusEl = document.getElementById('migrationStatus');
+  const btnStart = document.getElementById('btnStartMigration');
+  const btnBackup = document.getElementById('btnDownloadBackup');
+  statusEl.innerHTML = '⏳ Analyseren van trades in Supabase...';
+  btnStart.style.display = 'none';
+  btnBackup.style.display = 'none';
+  
+  try {
+    // Fetch all trade IDs and check which have base64 screenshots
+    // We can't use light-load here because we need to check for base64 fields.
+    // Instead, we fetch just the id + whether screenshot fields exist.
+    const { data, error } = await sb.from('trades')
+      .select('id, data->screenshot, data->screenshots, data->screenshotPaths')
+      .eq('user_id', currentUser.id);
+    
+    if (error) {
+      statusEl.innerHTML = `<span style="color:#ef4444;">❌ Fout: ${error.message}</span>`;
+      return;
+    }
+    
+    const needsMigration = [];
+    let alreadyMigrated = 0;
+    let noScreenshots = 0;
+    
+    (data || []).forEach(row => {
+      const hasBase64 = !!row.screenshot || (Array.isArray(row.screenshots) && row.screenshots.length > 0);
+      const hasPaths = Array.isArray(row.screenshotPaths) && row.screenshotPaths.length > 0;
+      if (hasBase64) needsMigration.push(row.id);
+      else if (hasPaths) alreadyMigrated++;
+      else noScreenshots++;
+    });
+    
+    migrationState = { needsMigration, analyzed: true };
+    
+    statusEl.innerHTML = `
+      <div style="margin-bottom:6px;"><strong>Analyse voltooid.</strong></div>
+      <div>📊 Totaal trades: ${data.length}</div>
+      <div style="color:#fbbf24;">🔄 Nog te migreren (met base64): <strong>${needsMigration.length}</strong></div>
+      <div style="color:#10b981;">✅ Al gemigreerd (met paths): ${alreadyMigrated}</div>
+      <div style="color:#64748b;">— Zonder screenshots: ${noScreenshots}</div>
+    `;
+    
+    if (needsMigration.length > 0) {
+      btnStart.style.display = 'inline-block';
+      btnBackup.style.display = 'inline-block';
+    } else {
+      statusEl.innerHTML += '<div style="margin-top:8px; color:#10b981;">✅ Alle screenshots zijn al gemigreerd. Niets te doen.</div>';
+    }
+  } catch (err) {
+    statusEl.innerHTML = `<span style="color:#ef4444;">❌ Fout: ${err.message}</span>`;
+  }
+}
+
+async function downloadMigrationBackup() {
+  showToast('Backup ophalen (kan even duren)...');
+  try {
+    // Fetch full data for the trades needing migration only, in small batches to avoid timeouts
+    const batchSize = 5;
+    const allRows = [];
+    for (let i = 0; i < migrationState.needsMigration.length; i += batchSize) {
+      const batch = migrationState.needsMigration.slice(i, i + batchSize);
+      const { data, error } = await sb.from('trades').select('*')
+        .eq('user_id', currentUser.id).in('id', batch);
+      if (error) throw error;
+      if (data) allRows.push(...data);
+    }
+    const json = JSON.stringify(allRows, null, 2);
+    const blob = new Blob([json], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `trades-backup-${today()}.json`;
+    a.click();
+    showToast('Backup gedownload ✓');
+  } catch (err) {
+    showToast('Backup fout: ' + err.message, true);
+  }
+}
+
+async function startScreenshotMigration() {
+  if (!migrationState.analyzed || migrationState.needsMigration.length === 0) {
+    showToast('Doe eerst een analyse', true);
+    return;
+  }
+  
+  if (!confirm(`Migratie starten voor ${migrationState.needsMigration.length} trades?\n\nDit kan een paar minuten duren. Ga niet weg van deze pagina tijdens de migratie.`)) {
+    return;
+  }
+  
+  const progressWrap = document.getElementById('migrationProgress');
+  const progressText = document.getElementById('migrationProgressText');
+  const progressBar = document.getElementById('migrationProgressBar');
+  const logEl = document.getElementById('migrationLog');
+  const btnStart = document.getElementById('btnStartMigration');
+  const btnBackup = document.getElementById('btnDownloadBackup');
+  
+  progressWrap.style.display = 'block';
+  btnStart.disabled = true;
+  btnBackup.disabled = true;
+  
+  const total = migrationState.needsMigration.length;
+  let done = 0, ok = 0, failed = 0;
+  const failedIds = [];
+  const log = (msg) => {
+    logEl.innerHTML += msg + '<br>';
+    logEl.scrollTop = logEl.scrollHeight;
+  };
+  
+  for (const tradeId of migrationState.needsMigration) {
+    done++;
+    progressText.textContent = `Bezig: ${done} / ${total} (${ok} OK, ${failed} fout)`;
+    progressBar.style.width = `${(done / total * 100).toFixed(1)}%`;
+    
+    try {
+      // 1. Fetch full trade (with base64 screenshots)
+      const { data: rows, error: fetchErr } = await sb.from('trades').select('*')
+        .eq('user_id', currentUser.id).eq('id', tradeId).limit(1);
+      if (fetchErr) throw fetchErr;
+      if (!rows || rows.length === 0) throw new Error('Trade not found');
+      
+      const row = rows[0];
+      const data = row.data || {};
+      
+      // 2. Collect base64 screenshots
+      let screenshots = [];
+      if (Array.isArray(data.screenshots) && data.screenshots.length > 0) {
+        screenshots = data.screenshots.filter(s => s && typeof s === 'string' && s.startsWith('data:'));
+      } else if (data.screenshot && typeof data.screenshot === 'string' && data.screenshot.startsWith('data:')) {
+        screenshots = [data.screenshot];
+      }
+      
+      if (screenshots.length === 0) {
+        // Nothing to migrate but the flag said there was — just strip the empty fields
+        log(`⚠️ ${tradeId}: geen echte base64 gevonden, stripping leeg veld`);
+      }
+      
+      // 3. Upload each screenshot to Storage
+      const paths = [];
+      for (let i = 0; i < screenshots.length; i++) {
+        const path = await screenshotStorage.upload(tradeId, i, screenshots[i]);
+        paths.push(path);
+      }
+      
+      // 4. Update the trade: strip base64 fields, add screenshotPaths
+      const newData = { ...data };
+      delete newData.screenshot;
+      delete newData.screenshots;
+      newData.screenshotPaths = paths;
+      
+      const { error: updErr } = await sb.from('trades')
+        .update({ data: newData })
+        .eq('user_id', currentUser.id)
+        .eq('id', tradeId);
+      if (updErr) throw updErr;
+      
+      ok++;
+      log(`✅ ${tradeId} (${screenshots.length} screenshot${screenshots.length !== 1 ? 's' : ''})`);
+    } catch (err) {
+      failed++;
+      failedIds.push(tradeId);
+      console.error(`Migration failed for ${tradeId}:`, err);
+      log(`❌ ${tradeId}: ${err.message || err}`);
+    }
+    
+    // Small pause to avoid hammering Supabase
+    await new Promise(r => setTimeout(r, 100));
+  }
+  
+  progressText.textContent = `Klaar! ${ok} succes, ${failed} fout`;
+  btnStart.disabled = false;
+  btnBackup.disabled = false;
+  
+  if (failed > 0) {
+    log(`<br><strong style="color:#ef4444;">${failed} trade(s) faalden:</strong> ${failedIds.join(', ')}`);
+    log(`Deze trades zijn onaangetast in Supabase — je kan de migratie opnieuw draaien.`);
+  } else {
+    log(`<br><strong style="color:#10b981;">Alle ${ok} trades succesvol gemigreerd!</strong>`);
+    log(`Herlaad de pagina om de trades snel te zien.`);
+  }
+  
+  showToast(`Migratie klaar: ${ok} OK, ${failed} fout${failed > 0 ? '' : ' ✓'}`, failed > 0);
+}
+
 function exportData() {
   const data = {
     exportDate: new Date().toISOString(),
