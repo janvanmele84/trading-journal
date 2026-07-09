@@ -1856,29 +1856,58 @@ async function loadAllData() {
   state.dayReviews = [];
   state.todayChecklist = null;
   
+  let tradesLoadFailed = false;
+  
+  // Load trades — isolated: a timeout here shouldn't break settings/checklists load
   try {
-    // Load trades WITHOUT heavy base64 screenshots — those get fetched on demand
     const trades = await cloudStorage.getAllTradesLight();
     state.trades = trades.map(t => ({ ...t, ...(t.data || {}) }));
     state.trades.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-    
-    // Load checklists
+  } catch (err) {
+    console.error('Trade load error:', err);
+    tradesLoadFailed = true;
+  }
+  
+  // Load checklists
+  try {
     const checklists = await cloudStorage.getAll('checklists');
     state.checklistHistory = checklists.map(c => ({ ...c, ...(c.data || {}) }));
     state.checklistHistory.sort((a, b) => b.date.localeCompare(a.date));
     state.todayChecklist = state.checklistHistory.find(c => c.date === today()) || null;
-    
-    // Load reviews
+  } catch (err) {
+    console.error('Checklist load error:', err);
+  }
+  
+  // Load reviews
+  try {
     const reviews = await cloudStorage.getAll('reviews');
     state.dayReviews = reviews.map(r => ({ ...r, ...(r.data || {}) }));
-    
-    // Load settings
+  } catch (err) {
+    console.error('Reviews load error:', err);
+  }
+  
+  // Load settings
+  try {
     const settings = await cloudStorage.getOne('settings', 'user_id', currentUser.id);
     if (settings && settings.data) state.settings = settings.data;
-    
   } catch (err) {
-    console.error('Load error:', err);
-    showToast('Fout bij laden: ' + err.message, true);
+    console.error('Settings load error:', err);
+  }
+  
+  // If trades failed to load, show a persistent banner directing to the migration screen
+  if (tradesLoadFailed) {
+    const banner = document.createElement('div');
+    banner.id = 'tradesLoadFailedBanner';
+    banner.style.cssText = 'background:linear-gradient(135deg,#7c2d12,#991b1b); color:white; padding:14px 20px; margin:0 0 16px 0; border-radius:8px; font-size:14px; line-height:1.6;';
+    banner.innerHTML = `
+      ⚠️ <strong>Trades konden niet geladen worden</strong> — de trades-tabel is te zwaar door base64-screenshots. 
+      Ga naar <strong>Instellingen → Screenshot Migratie</strong> om de screenshots naar Supabase Storage te verplaatsen. 
+      Daarna laden je trades weer normaal.
+    `;
+    // Insert at the top of the main content area
+    const main = document.querySelector('.container') || document.body;
+    if (main.firstChild) main.insertBefore(banner, main.firstChild);
+    else main.appendChild(banner);
   }
 }
 
@@ -4592,11 +4621,12 @@ async function analyzeMigration() {
   btnBackup.style.display = 'none';
   
   try {
-    // Fetch all trade IDs and check which have base64 screenshots
-    // We can't use light-load here because we need to check for base64 fields.
-    // Instead, we fetch just the id + whether screenshot fields exist.
+    // Fetch ONLY the IDs — this is ultra-fast because it doesn't touch the heavy `data` JSONB.
+    // Every trade with an ID is a migration candidate; whether it actually needs migration
+    // is decided per-trade during the migration loop (we skip trades that already have screenshotPaths
+    // and no base64 fields).
     const { data, error } = await sb.from('trades')
-      .select('id, data->screenshot, data->screenshots, data->screenshotPaths')
+      .select('id')
       .eq('user_id', currentUser.id);
     
     if (error) {
@@ -4604,33 +4634,21 @@ async function analyzeMigration() {
       return;
     }
     
-    const needsMigration = [];
-    let alreadyMigrated = 0;
-    let noScreenshots = 0;
-    
-    (data || []).forEach(row => {
-      const hasBase64 = !!row.screenshot || (Array.isArray(row.screenshots) && row.screenshots.length > 0);
-      const hasPaths = Array.isArray(row.screenshotPaths) && row.screenshotPaths.length > 0;
-      if (hasBase64) needsMigration.push(row.id);
-      else if (hasPaths) alreadyMigrated++;
-      else noScreenshots++;
-    });
-    
-    migrationState = { needsMigration, analyzed: true };
+    const allIds = (data || []).map(row => row.id);
+    migrationState = { needsMigration: allIds, analyzed: true };
     
     statusEl.innerHTML = `
       <div style="margin-bottom:6px;"><strong>Analyse voltooid.</strong></div>
-      <div>📊 Totaal trades: ${data.length}</div>
-      <div style="color:#fbbf24;">🔄 Nog te migreren (met base64): <strong>${needsMigration.length}</strong></div>
-      <div style="color:#10b981;">✅ Al gemigreerd (met paths): ${alreadyMigrated}</div>
-      <div style="color:#64748b;">— Zonder screenshots: ${noScreenshots}</div>
+      <div>📊 Totaal trades in Supabase: <strong>${allIds.length}</strong></div>
+      <div style="color:#94a3b8; font-size:12px; margin-top:6px;">
+        De migratie gaat één trade per keer, checkt of hij base64 screenshots heeft, 
+        en upload die naar Storage. Al-gemigreerde trades worden overgeslagen.
+      </div>
     `;
     
-    if (needsMigration.length > 0) {
+    if (allIds.length > 0) {
       btnStart.style.display = 'inline-block';
       btnBackup.style.display = 'inline-block';
-    } else {
-      statusEl.innerHTML += '<div style="margin-top:8px; color:#10b981;">✅ Alle screenshots zijn al gemigreerd. Niets te doen.</div>';
     }
   } catch (err) {
     statusEl.innerHTML = `<span style="color:#ef4444;">❌ Fout: ${err.message}</span>`;
@@ -4638,17 +4656,23 @@ async function analyzeMigration() {
 }
 
 async function downloadMigrationBackup() {
-  showToast('Backup ophalen (kan even duren)...');
+  const statusEl = document.getElementById('migrationStatus');
+  const originalStatus = statusEl.innerHTML;
+  const ids = migrationState.needsMigration;
+  const total = ids.length;
+  
   try {
-    // Fetch full data for the trades needing migration only, in small batches to avoid timeouts
-    const batchSize = 5;
+    statusEl.innerHTML = `⏳ Backup ophalen: 0 / ${total} trades...`;
     const allRows = [];
-    for (let i = 0; i < migrationState.needsMigration.length; i += batchSize) {
-      const batch = migrationState.needsMigration.slice(i, i + batchSize);
+    for (let i = 0; i < ids.length; i++) {
+      // Fetch ONE trade at a time to stay well under the 8-second timeout
       const { data, error } = await sb.from('trades').select('*')
-        .eq('user_id', currentUser.id).in('id', batch);
+        .eq('user_id', currentUser.id).eq('id', ids[i]).limit(1);
       if (error) throw error;
-      if (data) allRows.push(...data);
+      if (data && data[0]) allRows.push(data[0]);
+      if ((i + 1) % 5 === 0 || i === ids.length - 1) {
+        statusEl.innerHTML = `⏳ Backup ophalen: ${i + 1} / ${total} trades...`;
+      }
     }
     const json = JSON.stringify(allRows, null, 2);
     const blob = new Blob([json], { type: 'application/json' });
@@ -4656,9 +4680,9 @@ async function downloadMigrationBackup() {
     a.href = URL.createObjectURL(blob);
     a.download = `trades-backup-${today()}.json`;
     a.click();
-    showToast('Backup gedownload ✓');
+    statusEl.innerHTML = originalStatus + `<div style="color:#10b981; margin-top:8px;">✅ Backup gedownload (${allRows.length} trades, ~${Math.round(json.length/1024/1024)} MB)</div>`;
   } catch (err) {
-    showToast('Backup fout: ' + err.message, true);
+    statusEl.innerHTML = originalStatus + `<div style="color:#ef4444; margin-top:8px;">❌ Backup fout: ${err.message}</div>`;
   }
 }
 
@@ -4684,7 +4708,7 @@ async function startScreenshotMigration() {
   btnBackup.disabled = true;
   
   const total = migrationState.needsMigration.length;
-  let done = 0, ok = 0, failed = 0;
+  let done = 0, ok = 0, failed = 0, skipped = 0;
   const failedIds = [];
   const log = (msg) => {
     logEl.innerHTML += msg + '<br>';
@@ -4693,7 +4717,7 @@ async function startScreenshotMigration() {
   
   for (const tradeId of migrationState.needsMigration) {
     done++;
-    progressText.textContent = `Bezig: ${done} / ${total} (${ok} OK, ${failed} fout)`;
+    progressText.textContent = `Bezig: ${done} / ${total} (${ok} OK, ${skipped} overgeslagen, ${failed} fout)`;
     progressBar.style.width = `${(done / total * 100).toFixed(1)}%`;
     
     try {
@@ -4706,27 +4730,36 @@ async function startScreenshotMigration() {
       const row = rows[0];
       const data = row.data || {};
       
-      // 2. Collect base64 screenshots
+      // 2. Check if already migrated (has screenshotPaths and no base64 fields) — skip if so
+      const hasBase64Screenshot = !!(data.screenshot && typeof data.screenshot === 'string' && data.screenshot.startsWith('data:'));
+      const hasBase64Screenshots = Array.isArray(data.screenshots) 
+        && data.screenshots.some(s => s && typeof s === 'string' && s.startsWith('data:'));
+      const hasPaths = Array.isArray(data.screenshotPaths) && data.screenshotPaths.length > 0;
+      
+      if (!hasBase64Screenshot && !hasBase64Screenshots) {
+        skipped++;
+        log(`⏭️ ${tradeId} — geen base64, al gemigreerd of geen screenshots`);
+        await new Promise(r => setTimeout(r, 50));
+        continue;
+      }
+      
+      // 3. Collect base64 screenshots
       let screenshots = [];
       if (Array.isArray(data.screenshots) && data.screenshots.length > 0) {
         screenshots = data.screenshots.filter(s => s && typeof s === 'string' && s.startsWith('data:'));
-      } else if (data.screenshot && typeof data.screenshot === 'string' && data.screenshot.startsWith('data:')) {
+      } else if (hasBase64Screenshot) {
         screenshots = [data.screenshot];
       }
       
-      if (screenshots.length === 0) {
-        // Nothing to migrate but the flag said there was — just strip the empty fields
-        log(`⚠️ ${tradeId}: geen echte base64 gevonden, stripping leeg veld`);
-      }
-      
-      // 3. Upload each screenshot to Storage
-      const paths = [];
+      // 4. Upload each screenshot to Storage
+      const paths = hasPaths ? [...data.screenshotPaths] : [];
       for (let i = 0; i < screenshots.length; i++) {
         const path = await screenshotStorage.upload(tradeId, i, screenshots[i]);
-        paths.push(path);
+        if (i < paths.length) paths[i] = path;
+        else paths.push(path);
       }
       
-      // 4. Update the trade: strip base64 fields, add screenshotPaths
+      // 5. Update the trade: strip base64 fields, add screenshotPaths
       const newData = { ...data };
       delete newData.screenshot;
       delete newData.screenshots;
@@ -4751,7 +4784,7 @@ async function startScreenshotMigration() {
     await new Promise(r => setTimeout(r, 100));
   }
   
-  progressText.textContent = `Klaar! ${ok} succes, ${failed} fout`;
+  progressText.textContent = `Klaar! ${ok} succes, ${skipped} overgeslagen, ${failed} fout`;
   btnStart.disabled = false;
   btnBackup.disabled = false;
   
