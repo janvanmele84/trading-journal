@@ -572,9 +572,9 @@
           <select id="tradeInstrument" onchange="handleInstrumentChange()">
             <option value="DAX">DAX</option>
             <option value="UK100">UK100</option>
-            <option value="XAU" selected>XAU (Goud)</option>
+            <option value="XAU">XAU (Goud)</option>
             <option value="US30">US30</option>
-            <option value="US100">US100</option>
+            <option value="US100" selected>US100</option>
             <option value="US500">US500</option>
             <!-- CUSTOM_INSTRUMENTS_PLACEHOLDER -->
             <option value="__custom__">+ Nieuw aandeel toevoegen...</option>
@@ -582,7 +582,9 @@
           </select>
           <input type="text" id="tradeInstrumentCustom" placeholder="Naam aandeel/instrument" style="display:none; margin-top:6px;">
         </div>
-        <div class="form-group">
+        <!-- Richting is nu auto-berekend uit entry/exit/pnl bij opslaan.
+             Veld blijft verborgen in de DOM voor backwards-compatibility. -->
+        <div class="form-group" style="display:none;">
           <label>Richting</label>
           <select id="tradeDirection">
             <option value="long">Long</option>
@@ -590,21 +592,16 @@
           </select>
         </div>
         <div class="form-group">
-          <label>Sessie</label>
-          <select id="tradeSession" onchange="handleSessionChange()">
-            <option value="voormiddag">Voormiddag (9-11u)</option>
-            <option value="namiddag">Namiddag (15:30-17:30u)</option>
-            <option value="ander">Ander</option>
-          </select>
-        </div>
-        <div class="form-group">
           <label>Tijdsblok</label>
-          <select id="tradeTimeBlock">
-            <option value="9-10">9:00-10:00</option>
-            <option value="10-11">10:00-11:00</option>
-            <option value="15:30-16:30">15:30-16:30</option>
-            <option value="16:30-17:30">16:30-17:30</option>
-            <option value="ander">Ander</option>
+          <select id="tradeTimeBlock" onchange="handleTimeBlockChange()">
+            <option value="9-11" selected>⭐ 9:00-11:00 (prime)</option>
+            <option value="15-17">⭐ 15:00-17:00 (prime)</option>
+            <option value="11-13">11:00-13:00</option>
+            <option value="13-15">13:00-15:00</option>
+            <option value="17-19">17:00-19:00</option>
+            <option value="19-21">19:00-21:00</option>
+            <option value="21-23">21:00-23:00</option>
+            <option value="ander">Ander (nachtblok 23-9u)</option>
           </select>
         </div>
         <div class="form-group">
@@ -628,30 +625,36 @@
       <div class="form-grid">
         <div class="form-group">
           <label>Entry prijs</label>
-          <input type="number" id="tradeEntry" step="0.01" placeholder="0.00">
+          <input type="number" id="tradeEntry" step="0.01" placeholder="0.00" oninput="updateLiveRDisplay()">
         </div>
         <div class="form-group">
           <label>Exit prijs</label>
-          <input type="number" id="tradeExit" step="0.01" placeholder="0.00">
+          <input type="number" id="tradeExit" step="0.01" placeholder="0.00" oninput="updateLiveRDisplay()">
         </div>
         <div class="form-group">
           <label>Stop loss</label>
-          <input type="number" id="tradeStop" step="0.01" placeholder="0.00">
+          <input type="number" id="tradeStop" step="0.01" placeholder="0.00" oninput="updateLiveRDisplay()">
         </div>
         <div class="form-group">
           <label>Target</label>
-          <input type="number" id="tradeTarget" step="0.01" placeholder="0.00">
+          <input type="number" id="tradeTarget" step="0.01" placeholder="0.00" oninput="updateLiveRDisplay()">
         </div>
       </div>
       
       <div class="form-grid">
         <div class="form-group">
           <label>P&L (€)</label>
-          <input type="number" id="tradePnL" step="0.01" placeholder="0.00">
+          <input type="number" id="tradePnL" step="0.01" placeholder="0.00" oninput="updateSLScenarioOptions(); updateLiveRDisplay()">
         </div>
         <div class="form-group">
           <label>Aantal contracten/lots</label>
           <input type="number" id="tradeSize" step="0.01" placeholder="1">
+        </div>
+        <div class="form-group">
+          <label>Live R-multiple</label>
+          <div id="liveRDisplay" style="padding:12px 14px; background:linear-gradient(135deg,#0f172a,#1e293b); border:2px solid #334155; border-radius:8px; font-size:22px; font-weight:700; text-align:center; color:#64748b; min-height:48px; display:flex; align-items:center; justify-content:center;">
+            — R
+          </div>
         </div>
         <div class="form-group">
           <label>Setup type</label>
@@ -659,24 +662,24 @@
             <option value="">-- Kies setup --</option>
             <option value="break-retest">Break & Retest</option>
             <option value="reversal">Reversal</option>
-            <option value="in-range">In Range</option>
-            <option value="orb">Opening Range Breakout</option>
-            <option value="hod-lod-breakout">HOD/LOD Breakout</option>
+            <option value="opening-breakout">Opening Breakout</option>
+            <option value="range-breakout">Range Breakout</option>
           </select>
         </div>
-        <div class="form-group">
+        <!-- Plan gevolgd + Verbeterpunt: verwijderd uit UI, hidden in DOM voor backwards compat -->
+        <div class="form-group" style="display:none;">
           <label>Plan gevolgd?</label>
           <select id="tradePlanFollowed">
-            <option value="ja">Ja, volledig</option>
+            <option value="ja" selected>Ja, volledig</option>
             <option value="gedeeltelijk">Gedeeltelijk</option>
             <option value="nee">Nee, geïmproviseerd</option>
           </select>
         </div>
-        <div class="form-group">
+        <div class="form-group" style="display:none;">
           <label>Verbeterpunt</label>
           <select id="tradeImprovement">
-            <option value="">-- Selecteer (optioneel) --</option>
-            <option value="setup_correct" selected>Setup was correct, geen verbeterpunten</option>
+            <option value="" selected>-- Selecteer (optioneel) --</option>
+            <option value="setup_correct">Setup was correct, geen verbeterpunten</option>
             <option value="invalid_trade">Ongeldige trade (had niet genomen mogen worden)</option>
             <option value="entry_too_early">Entry te vroeg genomen</option>
             <option value="entry_too_late">Entry te laat genomen</option>
@@ -691,7 +694,8 @@
       <h3>Trade Analyse</h3>
       <div class="info-box" style="font-size:12px;">Deze gegevens worden gebruikt voor statistieken en patroon-analyse per instrument.</div>
       <div class="form-grid">
-        <div class="form-group">
+        <!-- Mee met daily trend: verwijderd uit UI, hidden in DOM voor backwards compat -->
+        <div class="form-group" style="display:none;">
           <label>Mee met daily trend?</label>
           <select id="evalDailyTrend">
             <option value="">-- Selecteer --</option>
@@ -702,29 +706,25 @@
         <div class="form-group">
           <label>Op welk level?</label>
           <select id="evalLevel">
-            <option value="">-- Selecteer --</option>
-            <option value="YH">Yesterday High (YH)</option>
-            <option value="YL">Yesterday Low (YL)</option>
-            <option value="AsiaH">Asia High (AH)</option>
-            <option value="AsiaL">Asia Low (AL)</option>
-            <option value="LondonH">London High (LH)</option>
-            <option value="LondonL">London Low (LL)</option>
-            <option value="RangeTop">Range Top</option>
-            <option value="RangeBottom" selected>Range Bottom</option>
+            <option value="" selected>-- Selecteer --</option>
+            <option value="AsiaHL">Asia H/L</option>
+            <option value="LondonHL">London H/L</option>
+            <option value="YHL">Yesterday H/L</option>
+            <option value="VWAP">VWAP</option>
             <option value="other_key">Ander key level</option>
-            <option value="none">Geen level</option>
           </select>
         </div>
-        <div class="form-group">
+        <!-- Trade tov level, Indexen in de rug: verwijderd uit UI, hidden in DOM voor backwards compat -->
+        <div class="form-group" style="display:none;">
           <label>Trade tov level</label>
           <select id="evalLevelPrecision">
-            <option value="">-- Selecteer --</option>
-            <option value="exact" selected>Exact op het level</option>
+            <option value="" selected>-- Selecteer --</option>
+            <option value="exact">Exact op het level</option>
             <option value="near">In de buurt van het level</option>
             <option value="far">Niet bij een level</option>
           </select>
         </div>
-        <div class="form-group">
+        <div class="form-group" style="display:none;">
           <label>Indexen in de rug?</label>
           <select id="evalIndices">
             <option value="">-- Selecteer --</option>
@@ -734,7 +734,7 @@
             <option value="not_checked" selected>Niet bekeken</option>
           </select>
         </div>
-        <div class="form-group">
+        <div class="form-group" style="display:none;">
           <label>Timeframe entry</label>
           <select id="evalTimeframe">
             <option value="">-- Selecteer --</option>
@@ -745,7 +745,7 @@
             <option value="15min">15 min</option>
           </select>
         </div>
-        <div class="form-group">
+        <div class="form-group" style="display:none;">
           <label>Hammercandle aanwezig?</label>
           <select id="evalHammer">
             <option value="">-- Selecteer --</option>
@@ -771,7 +771,7 @@
             <option value="manual_na" selected>Niet gevoelsmatig gesloten / N/A</option>
           </select>
         </div>
-        <div class="form-group">
+        <div class="form-group" style="display:none;">
           <label>VWAP invloed?</label>
           <select id="evalVwap">
             <option value="">-- Selecteer --</option>
@@ -780,7 +780,7 @@
             <option value="neutral" selected>Geen merkbare invloed</option>
           </select>
         </div>
-        <div class="form-group">
+        <div class="form-group" style="display:none;">
           <label>Exit strategie</label>
           <select id="evalExit" onchange="updateShiftFieldVisibility()">
             <option value="">-- Selecteer --</option>
@@ -796,6 +796,24 @@
       <!-- Stop-shift decisions: visually emphasized block -->
       <div style="background:#0f172a; border:1px solid #334155; border-radius:8px; padding:14px; margin-bottom:14px;">
         <div style="font-weight:600; font-size:13px; color:#cbd5e1; margin-bottom:10px;">🛡️ Stop-shift beslissingen</div>
+        
+        <!-- SL scenario: dropdown options depend on P&L. Options are populated
+             dynamically by updateSLScenarioOptions() based on the pnl input. -->
+        <div class="form-group" id="slScenarioGroup" style="margin-bottom:14px;">
+          <label style="font-size:12px;">Wat gebeurde er met je stoploss?</label>
+          <select id="evalSLScenario" onchange="updateSLScenarioSubOptions()">
+            <option value="">-- Vul eerst je P&L in --</option>
+          </select>
+        </div>
+        <div class="form-group" id="slScenarioQualityGroup" style="display:none; margin-bottom:14px;">
+          <label style="font-size:12px;" id="slScenarioQualityLabel">Was dit een goede of slechte keuze?</label>
+          <select id="evalSLScenarioQuality">
+            <option value="">-- Selecteer --</option>
+            <option value="good">✓ Goede keuze</option>
+            <option value="bad">✗ Slechte keuze</option>
+          </select>
+        </div>
+        
         <div class="form-grid">
           <div class="form-group">
             <label style="font-size:12px;">1R aangeraakt?</label>
@@ -860,7 +878,7 @@
         </div>
       </div>
       
-      <div class="form-grid">
+      <div class="form-grid" style="display:none;">
         <div class="form-group">
           <label>ATR invloed?</label>
           <select id="evalAtr">
@@ -888,7 +906,7 @@
       <div class="info-box" style="margin-bottom:12px; font-size:12px;">
         Op alle schalen: <strong>1 = goed/weinig, 10 = slecht/veel</strong> (behalve Vertrouwen: 1 = weinig vertrouwen, 10 = veel vertrouwen)
       </div>
-      <div class="emotion-slider">
+      <div class="emotion-slider" style="display:none;">
         <label>Stress vooraf (1=rustig, 10=gestresst):</label>
         <input type="range" id="emotionStress" min="1" max="10" value="5" oninput="document.getElementById('emotionStressVal').textContent=this.value">
         <span class="slider-value" id="emotionStressVal">5</span>
@@ -919,7 +937,7 @@
         <label>Waarom deze trade? Wat zag je?</label>
         <textarea id="tradeReason" placeholder="Beschrijf wat je zag, waarom je instapte..."></textarea>
       </div>
-      <div class="form-group" style="margin-bottom:16px;">
+      <div class="form-group" style="display:none;">
         <label>Lessen / observaties</label>
         <textarea id="tradeLessons" placeholder="Wat ging goed? Wat zou je anders doen?"></textarea>
       </div>
@@ -990,6 +1008,7 @@
   <div class="panel" id="panel-history">
     <div class="card">
       <h2>Trade Geschiedenis</h2>
+      <div id="historyCalendar" style="margin-bottom:20px;"></div>
       <div id="allTrades"></div>
     </div>
     <div class="card">
@@ -1657,6 +1676,9 @@ const LABEL_TRANSLATIONS = {
   // Setup types
   'break-retest': 'Break & Retest',
   'reversal': 'Reversal',
+  'opening-breakout': 'Opening Breakout',
+  'range-breakout': 'Range Breakout',
+  // Legacy setup types (kept so old trades still display readable names)
   'in-range': 'In Range',
   'vwap-bounce': 'VWAP Bounce',
   'orb': 'Opening Range Breakout',
@@ -1670,7 +1692,12 @@ const LABEL_TRANSLATIONS = {
   'sl_moved_too_fast': 'SL te snel opgeschoven',
   'tp_too_fast': 'TP te snel gepakt',
   'tp_too_far': 'TP te ver weg',
-  // Level
+  // Level (new consolidated options)
+  'AsiaHL': 'Asia H/L',
+  'LondonHL': 'London H/L',
+  'YHL': 'Yesterday H/L',
+  'VWAP': 'VWAP',
+  // Legacy level values (kept so old trades still display readable names)
   'YH': 'Yesterday High',
   'YL': 'Yesterday Low',
   'AsiaH': 'Asia High',
@@ -2779,51 +2806,147 @@ function updateShiftFieldVisibility() {
   }
 }
 
-function handleSessionChange() {
-  const sessionEl = document.getElementById('tradeSession');
+// When user selects 'ander' from tijdsblok, add nighttime blocks (22-8) to the dropdown
+function handleTimeBlockChange() {
   const blockEl = document.getElementById('tradeTimeBlock');
-  if (!sessionEl || !blockEl) return;
-  const session = sessionEl.value;
-  const currentValue = blockEl.value;
+  if (!blockEl) return;
+  if (blockEl.value !== 'ander') return;
+  // Already expanded?
+  if (blockEl.querySelector('option[value="23-1"]')) {
+    return;
+  }
+  // Add night blocks (2u each) and remove 'ander'
+  const nightBlocks = [
+    { v: '23-1', l: '23:00-1:00' },
+    { v: '1-3', l: '1:00-3:00' },
+    { v: '3-5', l: '3:00-5:00' },
+    { v: '5-7', l: '5:00-7:00' },
+    { v: '7-9', l: '7:00-9:00' }
+  ];
+  const anderOption = blockEl.querySelector('option[value="ander"]');
+  if (anderOption) anderOption.remove();
+  nightBlocks.forEach(b => {
+    const opt = document.createElement('option');
+    opt.value = b.v;
+    opt.textContent = b.l;
+    blockEl.appendChild(opt);
+  });
+  blockEl.value = '23-1';
+}
+
+// Legacy: called from other functions after loading a trade — no-op now that Sessie is gone
+function handleSessionChange() {
+  // Sessie field removed; timeblock stays as-is
+}
+
+// SL SCENARIO — populates the dropdown with options based on the current P&L.
+// - Loss > $5: only option is "Stoploss geraakt"
+// - Between -$5 and +$5: "SL verschoven naar BE" (needs good/bad sub-choice)
+// - Profit > $5: "Voorziene TP gepakt" OR "SL trail" (SL trail needs good/bad sub-choice)
+// LIVE R DISPLAY — computes R-multiple from entry/exit/stop as the user types
+// and shows it prominently. Uses the same math as getRMultiple() but on live form input.
+function updateLiveRDisplay() {
+  const display = document.getElementById('liveRDisplay');
+  if (!display) return;
+  const entry = parseFloat(document.getElementById('tradeEntry').value);
+  const exit = parseFloat(document.getElementById('tradeExit').value);
+  const stop = parseFloat(document.getElementById('tradeStop').value);
+  const pnl = parseFloat(document.getElementById('tradePnL').value);
   
-  let blocks = [];
-  if (session === 'voormiddag') {
-    blocks = [
-      { v: '9-10', l: '9:00-10:00' },
-      { v: '10-11', l: '10:00-11:00' }
-    ];
-  } else if (session === 'namiddag') {
-    blocks = [
-      { v: '15:30-16:30', l: '15:30-16:30' },
-      { v: '16:30-17:30', l: '16:30-17:30' }
-    ];
+  if (!isFinite(entry) || !isFinite(exit) || !isFinite(stop) || entry === stop) {
+    display.textContent = '— R';
+    display.style.color = '#64748b';
+    display.style.borderColor = '#334155';
+    display.style.background = 'linear-gradient(135deg,#0f172a,#1e293b)';
+    return;
+  }
+  
+  const risk = Math.abs(entry - stop);
+  if (risk === 0) {
+    display.textContent = '— R';
+    return;
+  }
+  const isLong = stop < entry;
+  const priceMove = isLong ? (exit - entry) : (entry - exit);
+  const r = priceMove / risk;
+  const rStr = (r >= 0 ? '+' : '') + r.toFixed(2) + 'R';
+  display.textContent = rStr;
+  
+  const beThreshold = (typeof getBreakevenThreshold === 'function') ? getBreakevenThreshold() : 5;
+  const isBE = isFinite(pnl) && Math.abs(pnl) <= beThreshold;
+  if (isBE) {
+    display.style.color = '#94a3b8';
+    display.style.borderColor = '#475569';
+    display.style.background = 'linear-gradient(135deg,#0f172a,#1e293b)';
+  } else if (r > 0) {
+    display.style.color = '#10b981';
+    display.style.borderColor = '#10b981';
+    display.style.background = 'linear-gradient(135deg,rgba(16,185,129,0.08),rgba(16,185,129,0.02))';
+  } else if (r < 0) {
+    display.style.color = '#ef4444';
+    display.style.borderColor = '#ef4444';
+    display.style.background = 'linear-gradient(135deg,rgba(239,68,68,0.08),rgba(239,68,68,0.02))';
   } else {
-    // 'ander' — show all blocks incl. evening/night
-    blocks = [
-      { v: '8-9', l: '8:00-9:00' },
-      { v: '9-10', l: '9:00-10:00' },
-      { v: '10-11', l: '10:00-11:00' },
-      { v: '11-12', l: '11:00-12:00' },
-      { v: '12-13', l: '12:00-13:00' },
-      { v: '13-14', l: '13:00-14:00' },
-      { v: '14-15', l: '14:00-15:00' },
-      { v: '15-15:30', l: '15:00-15:30' },
-      { v: '15:30-16:30', l: '15:30-16:30' },
-      { v: '16:30-17:30', l: '16:30-17:30' },
-      { v: '17:30-19', l: '17:30-19:00' },
-      { v: '19-21', l: '19:00-21:00' },
-      { v: '21-23', l: '21:00-23:00' },
-      { v: 'nacht', l: 'Nacht (23:00-8:00)' }
+    display.style.color = '#94a3b8';
+    display.style.borderColor = '#475569';
+    display.style.background = 'linear-gradient(135deg,#0f172a,#1e293b)';
+  }
+}
+
+function updateSLScenarioOptions() {
+  const pnlEl = document.getElementById('tradePnL');
+  const scenarioEl = document.getElementById('evalSLScenario');
+  if (!pnlEl || !scenarioEl) return;
+  const pnl = parseFloat(pnlEl.value);
+  const currentValue = scenarioEl.value;
+  
+  let options = [];
+  if (!isFinite(pnl)) {
+    options = [{ v: '', l: '-- Vul eerst je P&L in --' }];
+  } else if (pnl <= -5) {
+    options = [
+      { v: '', l: '-- Selecteer --' },
+      { v: 'sl_hit', l: 'Stoploss geraakt' }
+    ];
+  } else if (pnl >= -5 && pnl <= 5) {
+    options = [
+      { v: '', l: '-- Selecteer --' },
+      { v: 'sl_to_be', l: 'SL verschoven naar BE' }
+    ];
+  } else if (pnl > 5) {
+    options = [
+      { v: '', l: '-- Selecteer --' },
+      { v: 'tp_hit', l: 'Voorziene TP gepakt' },
+      { v: 'sl_trail', l: 'SL trail (SL mee opgeschoven)' }
     ];
   }
-  // Always add 'ander' as last option
-  blocks.push({ v: 'ander', l: 'Ander' });
   
-  // Rebuild the dropdown
-  blockEl.innerHTML = blocks.map(b => `<option value="${b.v}">${b.l}</option>`).join('');
-  // Try to preserve the previous value if it still exists in the new list
-  const exists = blocks.some(b => b.v === currentValue);
-  if (exists) blockEl.value = currentValue;
+  scenarioEl.innerHTML = options.map(o => `<option value="${o.v}">${o.l}</option>`).join('');
+  // Restore previous value if it's still valid
+  if (options.some(o => o.v === currentValue)) scenarioEl.value = currentValue;
+  updateSLScenarioSubOptions();
+}
+
+// Show/hide the good/bad choice sub-dropdown based on the selected SL scenario.
+// - "sl_to_be" or "sl_trail" → good/bad question is meaningful
+// - "sl_hit" or "tp_hit" → no follow-up question needed
+function updateSLScenarioSubOptions() {
+  const scenarioEl = document.getElementById('evalSLScenario');
+  const qualityGroup = document.getElementById('slScenarioQualityGroup');
+  const qualityLabel = document.getElementById('slScenarioQualityLabel');
+  if (!scenarioEl || !qualityGroup) return;
+  const v = scenarioEl.value;
+  if (v === 'sl_to_be') {
+    qualityGroup.style.display = '';
+    if (qualityLabel) qualityLabel.textContent = 'Was SL naar BE verschuiven een goede of slechte keuze?';
+  } else if (v === 'sl_trail') {
+    qualityGroup.style.display = '';
+    if (qualityLabel) qualityLabel.textContent = 'Was SL trail een goede of slechte keuze?';
+  } else {
+    qualityGroup.style.display = 'none';
+    const q = document.getElementById('evalSLScenarioQuality');
+    if (q) q.value = '';
+  }
 }
 
 function getInstrumentValue() {
@@ -2949,7 +3072,28 @@ async function saveTrade() {
     timestamp: tradeTimestamp,
     date: chosenDate,
     instrument: getInstrumentValue(),
-    direction: document.getElementById('tradeDirection').value,
+    direction: (function() {
+      // Auto-detect direction from entry, exit, and pnl.
+      // Long profit: exit > entry. Long loss: exit < entry.
+      // Short profit: exit < entry. Short loss: exit > entry.
+      const en = parseFloat(document.getElementById('tradeEntry').value);
+      const ex = parseFloat(document.getElementById('tradeExit').value);
+      const pnlRaw = parseFloat(document.getElementById('tradePnL').value);
+      if (!isFinite(en) || !isFinite(ex) || !isFinite(pnlRaw)) {
+        // Fall back to whatever the (hidden) select currently holds
+        return document.getElementById('tradeDirection').value || 'long';
+      }
+      const priceUp = ex > en;
+      const priceDown = ex < en;
+      const isProfit = pnlRaw > 0;
+      const isLoss = pnlRaw < 0;
+      if (priceUp && isProfit) return 'long';
+      if (priceDown && isLoss) return 'long';
+      if (priceDown && isProfit) return 'short';
+      if (priceUp && isLoss) return 'short';
+      // Flat price or zero pnl → keep existing value
+      return document.getElementById('tradeDirection').value || 'long';
+    })(),
     session: document.getElementById('tradeSession').value,
     timeBlock: document.getElementById('tradeTimeBlock').value,
     entry,
@@ -2964,6 +3108,8 @@ async function saveTrade() {
     touched2R: document.getElementById('evalTouched2R').checked,
     touched1R: document.getElementById('evalTouched1R').checked,
     slToBE: document.getElementById('evalSLToBE').checked,
+    slScenario: document.getElementById('evalSLScenario').value || '',
+    slScenarioQuality: document.getElementById('evalSLScenarioQuality').value || '',
     slToOneR: document.getElementById('evalSLToOneR').checked,
     after1R: document.getElementById('evalAfter1R').value,
     after2R: document.getElementById('evalAfter2R').value,
@@ -3099,9 +3245,15 @@ function editTrade(tradeId) {
   setVal('evalAfter1R', trade.after1R || '');
   setVal('evalAfter2R', trade.after2R || '');
   setVal('evalAfter2RTarget', trade.after2RTarget || '');
+  // Populate SL scenario dropdown based on the trade's P&L, then set the saved value
+  if (typeof updateSLScenarioOptions === 'function') updateSLScenarioOptions();
+  setVal('evalSLScenario', trade.slScenario || '');
+  if (typeof updateSLScenarioSubOptions === 'function') updateSLScenarioSubOptions();
+  setVal('evalSLScenarioQuality', trade.slScenarioQuality || '');
   // Sync visual state for shift-checks and conditional dropdowns
   updateShiftCheckStyles();
   updateShiftFieldVisibility();
+  if (typeof updateLiveRDisplay === 'function') updateLiveRDisplay();
   setVal('evalAtr', ev.atr);
   setVal('evalMentorFollowed', ev.mentorFollowed);
   setVal('evalMentorName', ev.mentorName);
@@ -3241,10 +3393,13 @@ function clearTradeForm() {
   const slToOneREl = document.getElementById('evalSLToOneR');
   if (slToOneREl) slToOneREl.checked = false;
   // Reset shift-outcome dropdowns
-  ['evalAfter1R', 'evalAfter2R', 'evalAfter2RTarget'].forEach(id => {
+  ['evalAfter1R', 'evalAfter2R', 'evalAfter2RTarget', 'evalSLScenario', 'evalSLScenarioQuality'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.value = '';
   });
+  // Repopulate SL scenario options (empty by default since no P&L yet)
+  if (typeof updateSLScenarioOptions === 'function') updateSLScenarioOptions();
+  if (typeof updateLiveRDisplay === 'function') updateLiveRDisplay();
   // Sync visual state
   if (typeof updateShiftCheckStyles === 'function') updateShiftCheckStyles();
   if (typeof updateShiftFieldVisibility === 'function') updateShiftFieldVisibility();
@@ -3255,7 +3410,7 @@ function clearTradeForm() {
   if (mentorGroup) mentorGroup.style.display = 'none';
   // Reset instrument select to XAU
   const instrSelect = document.getElementById('tradeInstrument');
-  if (instrSelect) instrSelect.value = 'XAU';
+  if (instrSelect) instrSelect.value = 'US100';
   // Reset strategy checklist checkboxes
   document.querySelectorAll('input[id^="strat-"]').forEach(cb => cb.checked = false);
   updateStrategyScore();
@@ -3412,9 +3567,13 @@ function updateDayReviewSavedInfo() {
 function renderDayStats() {
   const todayTrades = state.trades.filter(t => t.date === today());
   let totalPnL = 0;
+  let totalR = 0;
+  let hasR = false;
   let wins = 0, losses = 0, breakevens = 0;
   todayTrades.forEach(t => { 
-    totalPnL += t.pnl; 
+    totalPnL += (typeof t.pnl === 'number' ? t.pnl : 0);
+    const r = getRMultiple(t);
+    if (r !== null) { totalR += r; hasR = true; }
     const cls = classifyTrade(t);
     if (cls === 'win') wins++;
     else if (cls === 'loss') losses++;
@@ -3423,8 +3582,14 @@ function renderDayStats() {
   const decisive = wins + losses;
   const winRate = decisive > 0 ? Math.round(wins/decisive*100) : 0;
   
+  // R display: prominent, colored by sign
+  const rDisplay = hasR 
+    ? `<span class="${totalR>0?'pnl-positive':totalR<0?'pnl-negative':''}" style="font-size:22px; font-weight:700;">${totalR>=0?'+':''}${totalR.toFixed(2)}R</span>`
+    : '<span style="color:#64748b;">— R</span>';
+  
   const el = document.getElementById('dayStats');
   el.innerHTML = `
+    <div class="stat-box" style="border:2px solid ${hasR ? (totalR>=0?'#10b981':'#ef4444') : '#334155'};"><div class="stat-label">R totaal</div><div class="stat-value">${rDisplay}</div></div>
     <div class="stat-box"><div class="stat-label">Trades</div><div class="stat-value">${todayTrades.length}</div></div>
     <div class="stat-box"><div class="stat-label">Wins</div><div class="stat-value pnl-positive">${wins}</div></div>
     <div class="stat-box"><div class="stat-label">Losses</div><div class="stat-value pnl-negative">${losses}</div></div>
@@ -3435,14 +3600,198 @@ function renderDayStats() {
 }
 
 // ==================== HISTORY ====================
-let historyFilterPeriod = 'last30'; // 'last30', 'last90', 'this_month', 'last_month', 'all'
+let historyFilterPeriod = 'last30'; // 'last30', 'last90', 'this_month', 'last_month', 'all', 'single_day'
+let historySelectedDay = null; // 'YYYY-MM-DD' when historyFilterPeriod === 'single_day'
+// Calendar navigation state — which month/year is currently shown in the calendar
+let historyCalendarYear = new Date().getFullYear();
+let historyCalendarMonth = new Date().getMonth(); // 0-11
 
 function setHistoryFilter(value) {
   historyFilterPeriod = value;
+  historySelectedDay = null; // clear day selection when switching to dropdown filter
   renderHistory();
 }
 
+// Called when user clicks a day in the calendar — filter to just that day
+function selectCalendarDay(dateStr) {
+  historyFilterPeriod = 'single_day';
+  historySelectedDay = dateStr;
+  renderHistory();
+}
+
+// Clear the single-day filter (used by "Toon alles" button)
+function clearCalendarDayFilter() {
+  historyFilterPeriod = 'last30';
+  historySelectedDay = null;
+  renderHistory();
+}
+
+// Calendar month navigation
+function calendarPrevMonth() {
+  historyCalendarMonth--;
+  if (historyCalendarMonth < 0) { historyCalendarMonth = 11; historyCalendarYear--; }
+  renderHistoryCalendar();
+}
+function calendarNextMonth() {
+  historyCalendarMonth++;
+  if (historyCalendarMonth > 11) { historyCalendarMonth = 0; historyCalendarYear++; }
+  renderHistoryCalendar();
+}
+function calendarToday() {
+  historyCalendarYear = new Date().getFullYear();
+  historyCalendarMonth = new Date().getMonth();
+  renderHistoryCalendar();
+}
+
+// Aggregate trades by date for the currently-shown month
+function aggregateTradesByDay() {
+  const map = {}; // 'YYYY-MM-DD' → { pnl, r, count, hasR }
+  state.trades.forEach(t => {
+    if (!t.date) return;
+    if (!map[t.date]) map[t.date] = { pnl: 0, r: 0, count: 0, hasR: false };
+    map[t.date].pnl += (typeof t.pnl === 'number' && isFinite(t.pnl)) ? t.pnl : 0;
+    const r = getRMultiple(t);
+    if (r !== null) { map[t.date].r += r; map[t.date].hasR = true; }
+    map[t.date].count++;
+  });
+  return map;
+}
+
+function renderHistoryCalendar() {
+  const el = document.getElementById('historyCalendar');
+  if (!el) return;
+  
+  const year = historyCalendarYear;
+  const month = historyCalendarMonth; // 0-11
+  const monthNames = ['Januari','Februari','Maart','April','Mei','Juni','Juli','Augustus','September','Oktober','November','December'];
+  const dayHeaders = ['MA','DI','WO','DO','VR','ZA','ZO']; // Monday-first
+  
+  const firstDay = new Date(year, month, 1);
+  const lastDay = new Date(year, month + 1, 0);
+  const daysInMonth = lastDay.getDate();
+  // Day-of-week of the 1st, Monday-first (0 = Mon .. 6 = Sun)
+  let firstDayOfWeek = firstDay.getDay(); // 0=Sun..6=Sat
+  firstDayOfWeek = firstDayOfWeek === 0 ? 6 : firstDayOfWeek - 1;
+  
+  const byDay = aggregateTradesByDay();
+  const todayStr = new Date().toISOString().split('T')[0];
+  
+  // Compute monthly stats
+  const monthPrefix = `${year}-${String(month + 1).padStart(2,'0')}`;
+  let monthPnL = 0, monthR = 0, monthTradingDays = 0, monthHasR = false;
+  Object.keys(byDay).forEach(d => {
+    if (d.startsWith(monthPrefix)) {
+      monthPnL += byDay[d].pnl;
+      if (byDay[d].hasR) { monthR += byDay[d].r; monthHasR = true; }
+      if (byDay[d].count > 0) monthTradingDays++;
+    }
+  });
+  
+  // Build header
+  let html = '<div style="background:linear-gradient(135deg,#0f172a,#1e293b); border:1px solid #334155; border-radius:10px; padding:16px;">';
+  
+  // Top bar: Today button, Month nav, Monthly stats
+  const monthPnLClass = monthPnL > 0 ? 'pnl-positive' : monthPnL < 0 ? 'pnl-negative' : '';
+  const monthRClass = monthR > 0 ? 'pnl-positive' : monthR < 0 ? 'pnl-negative' : '';
+  html += `<div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:14px; flex-wrap:wrap; gap:10px;">
+    <div style="display:flex; align-items:center; gap:8px;">
+      <button class="secondary" onclick="calendarToday()" style="padding:6px 12px; font-size:12px;">Vandaag</button>
+      <button class="secondary" onclick="calendarPrevMonth()" style="padding:6px 10px; font-size:12px;">‹</button>
+      <div style="font-size:16px; font-weight:600; color:#e2e8f0; min-width:150px; text-align:center;">${monthNames[month]} ${year}</div>
+      <button class="secondary" onclick="calendarNextMonth()" style="padding:6px 10px; font-size:12px;">›</button>
+    </div>
+    <div style="display:flex; align-items:center; gap:8px; font-size:12px;">
+      <span style="color:#94a3b8;">Maand-stats:</span>
+      <span class="${monthPnLClass}" style="background:#0f172a; padding:4px 10px; border-radius:6px; font-weight:600;">${monthPnL>=0?'+':''}€${monthPnL.toFixed(2)}</span>
+      ${monthHasR ? `<span class="${monthRClass}" style="background:#0f172a; padding:4px 10px; border-radius:6px; font-weight:600;">${monthR>=0?'+':''}${monthR.toFixed(2)}R</span>` : ''}
+      <span style="background:#0f172a; padding:4px 10px; border-radius:6px; color:#cbd5e1;">Trading dagen: ${monthTradingDays}</span>
+    </div>
+  </div>`;
+  
+  // Day headers
+  html += '<div style="display:grid; grid-template-columns:repeat(7, 1fr); gap:4px; margin-bottom:4px;">';
+  dayHeaders.forEach(d => {
+    html += `<div style="text-align:center; font-size:11px; color:#94a3b8; font-weight:600; padding:6px 0;">${d}</div>`;
+  });
+  html += '</div>';
+  
+  // Grid of days
+  html += '<div style="display:grid; grid-template-columns:repeat(7, 1fr); gap:4px;">';
+  
+  // Leading blanks
+  for (let i = 0; i < firstDayOfWeek; i++) {
+    html += '<div></div>';
+  }
+  
+  for (let d = 1; d <= daysInMonth; d++) {
+    const dateStr = `${monthPrefix}-${String(d).padStart(2,'0')}`;
+    const isToday = dateStr === todayStr;
+    const isSelected = dateStr === historySelectedDay;
+    const info = byDay[dateStr];
+    
+    let cellBg = '#0f172a';
+    let cellBorder = '#1e293b';
+    let cellStyle = '';
+    if (info) {
+      if (Math.abs(info.pnl) <= 5) {
+        cellBg = 'rgba(100,116,139,0.10)';
+        cellBorder = '#475569';
+      } else if (info.pnl > 0) {
+        cellBg = 'rgba(16,185,129,0.10)';
+        cellBorder = '#10b981';
+      } else if (info.pnl < 0) {
+        cellBg = 'rgba(239,68,68,0.10)';
+        cellBorder = '#ef4444';
+      }
+    }
+    if (isSelected) {
+      cellBorder = '#60a5fa';
+      cellStyle = 'box-shadow: 0 0 0 2px rgba(96,165,250,0.4);';
+    }
+    
+    const clickAttr = info ? `onclick="selectCalendarDay('${dateStr}')" style="cursor:pointer;"` : '';
+    
+    // Day number badge (highlighted for today)
+    const dayNumStyle = isToday 
+      ? 'display:inline-flex; align-items:center; justify-content:center; width:22px; height:22px; background:#60a5fa; color:white; border-radius:50%; font-weight:700; font-size:12px;'
+      : 'color:#cbd5e1; font-size:12px; padding:2px 4px;';
+    
+    let cellContent = `<div style="${dayNumStyle}">${d}</div>`;
+    if (info) {
+      const pnlClass = info.pnl > 0 ? 'pnl-positive' : info.pnl < 0 ? 'pnl-negative' : '';
+      const isDayBE = Math.abs(info.pnl) <= 5;
+      const pnlStyle = isDayBE ? 'color:#94a3b8;' : '';
+      cellContent += `<div style="margin-top:4px;">
+        <div class="${pnlClass}" style="font-size:12px; font-weight:700; ${pnlStyle}">${info.pnl>=0?'+':''}€${info.pnl.toFixed(2)}</div>
+        ${info.hasR ? `<div class="${pnlClass}" style="font-size:11px; font-weight:600; ${pnlStyle}">${info.r>=0?'+':''}${info.r.toFixed(2)}R</div>` : ''}
+        <div style="font-size:10px; color:#64748b; margin-top:2px;">Trades: ${info.count}</div>
+      </div>`;
+    }
+    
+    html += `<div ${clickAttr} style="background:${cellBg}; border:1px solid ${cellBorder}; border-radius:6px; padding:6px; min-height:70px; transition:transform 0.1s; ${cellStyle}" ${info ? 'onmouseover="this.style.transform=\'scale(1.03)\'" onmouseout="this.style.transform=\'scale(1)\'"' : ''}>
+      ${cellContent}
+    </div>`;
+  }
+  
+  html += '</div>';
+  
+  // Footer with clear-selection button if a day is selected
+  if (historySelectedDay) {
+    html += `<div style="margin-top:12px; text-align:center;">
+      <span style="color:#94a3b8; font-size:12px; margin-right:8px;">Gefilterd op <strong style="color:#60a5fa;">${historySelectedDay}</strong></span>
+      <button class="secondary" onclick="clearCalendarDayFilter()" style="padding:4px 10px; font-size:12px;">✕ Filter wissen</button>
+    </div>`;
+  }
+  
+  html += '</div>';
+  el.innerHTML = html;
+}
+
 function getFilteredHistoryTrades() {
+  // Single-day filter (set by clicking a day in the calendar)
+  if (historyFilterPeriod === 'single_day' && historySelectedDay) {
+    return state.trades.filter(t => t.date === historySelectedDay);
+  }
   if (historyFilterPeriod === 'all') return state.trades;
   const now = new Date();
   const todayStr = now.toISOString().split('T')[0];
@@ -3475,6 +3824,9 @@ function getFilteredHistoryTrades() {
 }
 
 function renderHistory() {
+  // Render the month calendar above the trades table
+  if (typeof renderHistoryCalendar === 'function') renderHistoryCalendar();
+  
   const allEl = document.getElementById('allTrades');
   
   // Filter dropdown (always shown, above the table)
@@ -3531,9 +3883,9 @@ function renderHistory() {
       if (r === null) {
         rCell = '<span style="color:#64748b;">—</span>';
       } else if (isBE) {
-        rCell = `<span style="color:#94a3b8;">${r>=0?'+':''}${r.toFixed(2)}R</span>`;
+        rCell = `<span style="color:#94a3b8; font-weight:700; font-size:15px;">${r>=0?'+':''}${r.toFixed(2)}R</span>`;
       } else {
-        rCell = `<span class="${r>0?'pnl-positive':r<0?'pnl-negative':''}">${r>=0?'+':''}${r.toFixed(2)}R</span>`;
+        rCell = `<span class="${r>0?'pnl-positive':r<0?'pnl-negative':''}" style="font-weight:700; font-size:15px;">${r>=0?'+':''}${r.toFixed(2)}R</span>`;
       }
       // P&L cell — BE in grey
       let pnlCell;
@@ -4917,6 +5269,8 @@ async function init() {
   // Sync stop-shift UI state
   if (typeof updateShiftCheckStyles === 'function') updateShiftCheckStyles();
   if (typeof updateShiftFieldVisibility === 'function') updateShiftFieldVisibility();
+  if (typeof updateSLScenarioOptions === 'function') updateSLScenarioOptions();
+  if (typeof updateLiveRDisplay === 'function') updateLiveRDisplay();
   
   // Wait for Supabase library to be available (max 5 seconds)
   let waited = 0;
