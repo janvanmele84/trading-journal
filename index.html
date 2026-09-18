@@ -3067,6 +3067,12 @@ async function saveTrade() {
     }
   }
   
+  // Defensive helpers — never crash on a missing DOM element after a refactor
+  const gv = (id, fallback = '') => { const el = document.getElementById(id); return el ? el.value : fallback; };
+  const gvNum = (id) => { const v = parseFloat(gv(id)); return isFinite(v) ? v : null; };
+  const gvInt = (id, fallback = 0) => { const v = parseInt(gv(id)); return isFinite(v) ? v : fallback; };
+  const gc = (id) => { const el = document.getElementById(id); return el ? !!el.checked : false; };
+
   const trade = {
     id: tradeId,
     timestamp: tradeTimestamp,
@@ -3076,12 +3082,11 @@ async function saveTrade() {
       // Auto-detect direction from entry, exit, and pnl.
       // Long profit: exit > entry. Long loss: exit < entry.
       // Short profit: exit < entry. Short loss: exit > entry.
-      const en = parseFloat(document.getElementById('tradeEntry').value);
-      const ex = parseFloat(document.getElementById('tradeExit').value);
-      const pnlRaw = parseFloat(document.getElementById('tradePnL').value);
+      const en = parseFloat(gv('tradeEntry'));
+      const ex = parseFloat(gv('tradeExit'));
+      const pnlRaw = parseFloat(gv('tradePnL'));
       if (!isFinite(en) || !isFinite(ex) || !isFinite(pnlRaw)) {
-        // Fall back to whatever the (hidden) select currently holds
-        return document.getElementById('tradeDirection').value || 'long';
+        return gv('tradeDirection', 'long') || 'long';
       }
       const priceUp = ex > en;
       const priceDown = ex < en;
@@ -3091,91 +3096,92 @@ async function saveTrade() {
       if (priceDown && isLoss) return 'long';
       if (priceDown && isProfit) return 'short';
       if (priceUp && isLoss) return 'short';
-      // Flat price or zero pnl → keep existing value
-      return document.getElementById('tradeDirection').value || 'long';
+      return gv('tradeDirection', 'long') || 'long';
     })(),
     // Sessie veld is verwijderd — leeg opslaan (backwards compat met oude trades die 'session' hadden)
     session: '',
-    timeBlock: document.getElementById('tradeTimeBlock').value,
+    timeBlock: gv('tradeTimeBlock'),
     entry,
-    exit: parseFloat(document.getElementById('tradeExit').value) || null,
-    stop: parseFloat(document.getElementById('tradeStop').value) || null,
-    target: parseFloat(document.getElementById('tradeTarget').value) || null,
+    exit: gvNum('tradeExit'),
+    stop: gvNum('tradeStop'),
+    target: gvNum('tradeTarget'),
     pnl,
-    size: parseFloat(document.getElementById('tradeSize').value) || 1,
-    setup: document.getElementById('tradeSetup').value,
-    planFollowed: document.getElementById('tradePlanFollowed').value,
-    improvement: document.getElementById('tradeImprovement').value,
-    touched2R: document.getElementById('evalTouched2R').checked,
-    touched1R: document.getElementById('evalTouched1R').checked,
-    slToBE: document.getElementById('evalSLToBE').checked,
-    slScenario: document.getElementById('evalSLScenario').value || '',
-    slScenarioQuality: document.getElementById('evalSLScenarioQuality').value || '',
-    slToOneR: document.getElementById('evalSLToOneR').checked,
-    after1R: document.getElementById('evalAfter1R').value,
-    after2R: document.getElementById('evalAfter2R').value,
-    after2RTarget: document.getElementById('evalAfter2RTarget').value,
+    size: (gvNum('tradeSize')) || 1,
+    setup: gv('tradeSetup'),
+    planFollowed: gv('tradePlanFollowed'),
+    improvement: gv('tradeImprovement'),
+    touched2R: gc('evalTouched2R'),
+    touched1R: gc('evalTouched1R'),
+    slToBE: gc('evalSLToBE'),
+    slScenario: gv('evalSLScenario'),
+    slScenarioQuality: gv('evalSLScenarioQuality'),
+    slToOneR: gc('evalSLToOneR'),
+    after1R: gv('evalAfter1R'),
+    after2R: gv('evalAfter2R'),
+    after2RTarget: gv('evalAfter2RTarget'),
     evaluation: {
-      dailyTrend: document.getElementById('evalDailyTrend').value,
-      level: document.getElementById('evalLevel').value,
-      levelPrecision: document.getElementById('evalLevelPrecision').value,
-      indices: document.getElementById('evalIndices').value,
-      timeframe: document.getElementById('evalTimeframe').value,
-      hammer: document.getElementById('evalHammer').value,
-      stoppedOut: document.getElementById('evalStoppedOut').value,
-      manualClose: document.getElementById('evalManualClose').value,
-      vwap: document.getElementById('evalVwap').value,
-      exit: document.getElementById('evalExit').value,
-      atr: document.getElementById('evalAtr').value,
-      mentorFollowed: document.getElementById('evalMentorFollowed').value,
-      mentorName: document.getElementById('evalMentorName').value
+      dailyTrend: gv('evalDailyTrend'),
+      level: gv('evalLevel'),
+      levelPrecision: gv('evalLevelPrecision'),
+      indices: gv('evalIndices'),
+      timeframe: gv('evalTimeframe'),
+      hammer: gv('evalHammer'),
+      stoppedOut: gv('evalStoppedOut'),
+      manualClose: gv('evalManualClose'),
+      vwap: gv('evalVwap'),
+      exit: gv('evalExit'),
+      atr: gv('evalAtr'),
+      mentorFollowed: gv('evalMentorFollowed'),
+      mentorName: gv('evalMentorName')
     },
-    exactTime: document.getElementById('tradeExactTime').value,
-    exitTime: document.getElementById('tradeExitTime').value,
-    durationMinutes: calculateDurationMinutes(
-      document.getElementById('tradeExactTime').value,
-      document.getElementById('tradeExitTime').value
-    ),
+    exactTime: gv('tradeExactTime'),
+    exitTime: gv('tradeExitTime'),
+    durationMinutes: calculateDurationMinutes(gv('tradeExactTime'), gv('tradeExitTime')),
     // Screenshots: only store paths to Storage, not base64 blobs
     screenshotPaths: screenshotPaths,
     emotions: {
-      stress: parseInt(document.getElementById('emotionStress').value),
-      confidence: parseInt(document.getElementById('emotionConfidence').value),
-      fomo: parseInt(document.getElementById('emotionFomo').value),
-      frustration: parseInt(document.getElementById('emotionFrustration').value),
-      satisfaction: parseInt(document.getElementById('emotionSatisfaction').value)
+      stress: gvInt('emotionStress', 5),
+      confidence: gvInt('emotionConfidence', 5),
+      fomo: gvInt('emotionFomo', 3),
+      frustration: gvInt('emotionFrustration', 3),
+      satisfaction: gvInt('emotionSatisfaction', 5)
     },
-    reason: document.getElementById('tradeReason').value,
-    lessons: document.getElementById('tradeLessons').value,
+    reason: gv('tradeReason'),
+    lessons: gv('tradeLessons'),
     checklistScore: existingTrade ? existingTrade.checklistScore : (state.todayChecklist ? state.todayChecklist.score : null),
     checklistStatus: existingTrade ? existingTrade.checklistStatus : (state.todayChecklist ? state.todayChecklist.status : null),
-    strategyChecklist: getStrategyChecklistData(),
-    preTradeCheck: getPreTradeCheckData()
+    strategyChecklist: (typeof getStrategyChecklistData === 'function') ? getStrategyChecklistData() : {},
+    preTradeCheck: (typeof getPreTradeCheckData === 'function') ? getPreTradeCheckData() : {}
   };
   
   try {
     await cloudStorage.upsert('trades', { id: trade.id, data: trade });
+  } catch (err) {
+    showToast('Fout bij opslaan: ' + (err && err.message ? err.message : err), true);
+    return;
+  }
+  // Trade IS opgeslagen — vanaf hier mogen UI-updates falen zonder dat we de gebruiker misleiden
+  try {
     if (existingTrade) {
-      // Replace in state
       const idx = state.trades.findIndex(t => t.id === trade.id);
       if (idx !== -1) state.trades[idx] = trade;
       showToast('Trade bijgewerkt');
       editingTradeId = null;
-      cancelEditMode();
-      // Go back to history to see the result
-      switchToPanel('history');
-      renderHistory();
+      if (typeof cancelEditMode === 'function') cancelEditMode();
+      if (typeof switchToPanel === 'function') switchToPanel('history');
+      if (typeof renderHistory === 'function') renderHistory();
     } else {
       state.trades.unshift(trade);
       showToast('Trade opgeslagen');
     }
-    clearTradeForm();
-    currentPreTradeCheck = {}; // Reset pre-trade check for next trade
-    renderTodayTrades();
-    updateTradeWarning();
   } catch (err) {
-    showToast('Fout bij opslaan: ' + err.message, true);
+    console.error('Post-save UI update error:', err);
   }
+  // Formulier altijd leegmaken — desnoods afzonderlijk in try/catch
+  try { clearTradeForm(); } catch (err) { console.error('clearTradeForm error:', err); }
+  try { currentPreTradeCheck = {}; } catch(_){}
+  try { if (typeof renderTodayTrades === 'function') renderTodayTrades(); } catch (err) { console.error('renderTodayTrades error:', err); }
+  try { if (typeof updateTradeWarning === 'function') updateTradeWarning(); } catch (err) { console.error('updateTradeWarning error:', err); }
 }
 
 function editTrade(tradeId) {
@@ -3409,16 +3415,19 @@ function clearTradeForm() {
   if (customInput) customInput.style.display = 'none';
   const mentorGroup = document.getElementById('mentorNameGroup');
   if (mentorGroup) mentorGroup.style.display = 'none';
-  // Reset instrument select to XAU
+  // Reset instrument select to US100
   const instrSelect = document.getElementById('tradeInstrument');
   if (instrSelect) instrSelect.value = 'US100';
+  // Reset tijdsblok naar default 9-11
+  const tbEl = document.getElementById('tradeTimeBlock');
+  if (tbEl) tbEl.value = '9-11';
   // Reset strategy checklist checkboxes
-  document.querySelectorAll('input[id^="strat-"]').forEach(cb => cb.checked = false);
-  updateStrategyScore();
-  // Re-sync timeblock dropdown to default session
+  try { document.querySelectorAll('input[id^="strat-"]').forEach(cb => cb.checked = false); } catch(_){}
+  try { if (typeof updateStrategyScore === 'function') updateStrategyScore(); } catch(_){}
+  // Legacy no-op stub
   if (typeof handleSessionChange === 'function') handleSessionChange();
   // Clear screenshot
-  removeScreenshot();
+  try { if (typeof removeScreenshot === 'function') removeScreenshot(); } catch(_){}
 }
 
 function updateTradeWarning() {
