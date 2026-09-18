@@ -814,7 +814,7 @@
           </select>
         </div>
         
-        <div class="form-grid">
+        <div class="form-grid" style="display:none;">
           <div class="form-group">
             <label style="font-size:12px;">1R aangeraakt?</label>
             <label class="shift-check" data-target="evalTouched1R">
@@ -3094,7 +3094,8 @@ async function saveTrade() {
       // Flat price or zero pnl → keep existing value
       return document.getElementById('tradeDirection').value || 'long';
     })(),
-    session: document.getElementById('tradeSession').value,
+    // Sessie veld is verwijderd — leeg opslaan (backwards compat met oude trades die 'session' hadden)
+    session: '',
     timeBlock: document.getElementById('tradeTimeBlock').value,
     entry,
     exit: parseFloat(document.getElementById('tradeExit').value) || null,
@@ -3856,7 +3857,7 @@ function renderHistory() {
       allEl.innerHTML = filterHtml + '<div class="empty-state">Geen trades in deze periode.</div>';
     }
   } else {
-    let html = '<table><thead><tr><th>Datum</th><th>Entry</th><th>Exit</th><th>Duur</th><th>Instrument</th><th>Richting</th><th>Setup</th><th>P&L</th><th>R</th><th>2R advies</th><th>Stop-shift advies</th><th>Plan?</th><th>Score</th><th>Acties</th></tr></thead><tbody>';
+    let html = '<table><thead><tr><th>Datum</th><th>Entry</th><th>Exit</th><th>Duur</th><th>Instrument</th><th>Richting</th><th>Setup</th><th>P&L</th><th>R</th><th>2R advies</th><th>Plan?</th><th>Score</th><th>Acties</th></tr></thead><tbody>';
     let prevDate = null;
     let renderErrors = 0;
     filtered.forEach(t => {
@@ -3916,20 +3917,6 @@ function renderHistory() {
           else adviceCell = '<span style="color:#f59e0b; font-size:11px;">≈ Gelijk uit</span>';
         }
       }
-      // Stop-shift advice column: combines SL→BE and SL→1R decisions
-      let shiftCell = '<span style="color:#475569;">—</span>';
-      const beD = classifySLToBEDecision(t);
-      const oneRD = classifySLToOneRDecision(t);
-      const parts = [];
-      if (beD === 'good') parts.push('<span style="color:#10b981;">✓ SL→BE</span>');
-      else if (beD === 'bad') parts.push('<span style="color:#ef4444;">✗ SL→BE</span>');
-      else if (beD === 'not-logged' && slMovedToBE(t)) parts.push('<span style="color:#fbbf24;">? SL→BE</span>');
-      if (oneRD === 'good') parts.push('<span style="color:#10b981;">✓ SL→1R</span>');
-      else if (oneRD === 'bad') parts.push('<span style="color:#ef4444;">✗ SL→1R</span>');
-      else if (oneRD === 'not-logged' && slMovedToOneR(t)) parts.push('<span style="color:#fbbf24;">? SL→1R</span>');
-      if (parts.length > 0) {
-        shiftCell = `<div style="font-size:11px; display:flex; flex-direction:column; gap:2px;">${parts.join('')}</div>`;
-      }
       // Count screenshots
       const screenshotCount = Array.isArray(t.screenshots) && t.screenshots.length > 0
         ? t.screenshots.filter(s => s).length
@@ -3950,7 +3937,6 @@ function renderHistory() {
         ${pnlCell}
         <td>${rCell}</td>
         <td>${adviceCell}</td>
-        <td>${shiftCell}</td>
         <td>${t.planFollowed || '-'}</td>
         <td>${t.checklistScore || '-'}</td>
         <td>${actionBtns}</td>
@@ -3960,7 +3946,7 @@ function renderHistory() {
         console.error('Trade render error for trade:', t && t.id, err, t);
         // Render a minimal fallback row so the trade still appears
         html += `<tr style="background:rgba(239,68,68,0.05);">
-          <td colspan="14" style="color:#ef4444; font-size:12px; padding:8px;">
+          <td colspan="13" style="color:#ef4444; font-size:12px; padding:8px;">
             ⚠️ Kon deze trade niet volledig renderen (id: ${(t && t.id) || 'onbekend'}). Foutmelding in console. Trade is niet verloren.
           </td>
         </tr>`;
@@ -4475,11 +4461,6 @@ function renderInsights() {
   
   // ====== 2R PAKKEN OF LATEN LOPEN? (de oude/heuristische kaart) ======
   html += render2RAnalysis(filtered);
-  
-  // ====== Drie nieuwe stop-shift beslissings-analyses ======
-  html += renderSLToBEAnalysis(filtered);
-  html += renderSLToOneRAnalysis(filtered);
-  html += render2RSecuredAnalysis(filtered);
   
   // Breakdown by instrument (only show when "all")
   if (insightsFilterInstrument === 'all') {
